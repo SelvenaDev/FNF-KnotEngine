@@ -534,7 +534,7 @@ class PlayState extends MusicBeatState
 		add(uiGroup);
 
 		Conductor.songPosition = -5000 / Conductor.songPosition;
-		var showTime:Bool = (ClientPrefs.data.timeTxtType != 'Disabled');
+		var showTime:Bool = (ClientPrefs.data.timeBarType != 'Disabled');
 		timeTxt = new FlxText(STRUM_X + (FlxG.width / 2) - 248, 19, 400, "", 32);
 		timeTxt.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		timeTxt.scrollFactor.set();
@@ -576,7 +576,7 @@ class PlayState extends MusicBeatState
 		strumLineNotes = new FlxTypedGroup<StrumNote>();
 		noteGroup.add(strumLineNotes);
 
-		if (ClientPrefs.data.timeBatType == 'Song Name' || ClientPrefs.data.timeBatType == 'Forever Engine')
+		if (ClientPrefs.data.timeBarType == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine')
 		{
 			timeTxt.size = 24;
 			timeTxt.y += 3;
@@ -932,8 +932,8 @@ class PlayState extends MusicBeatState
 
 		switch (ClientPrefs.data.enginemarkStyle) {
 			case 'Kade Engine':
-				var songLabel:String = (ClientPrefs.data.botplayName == 'Song Name' && cpuControlled
-					|| ClientPrefs.data.timeTxtType == 'Song Name')
+				var songLabel:String = ((ClientPrefs.data.botplayName == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine') && cpuControlled
+					|| (ClientPrefs.data.timeBarType == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine'))
 					? "" : SONG.song + " - ";
 				engineTxt.text = songLabel + Difficulty.getString().toUpperCase() + " | " + version;
 			case 'Knot Engine':
@@ -2238,12 +2238,12 @@ class PlayState extends MusicBeatState
 			songPercent = (curTime / songLength);
 
 			var songCalc:Float = (songLength - curTime);
-			if(ClientPrefs.data.timeTxtType == 'Time Elapsed') songCalc = curTime;
+			if(ClientPrefs.data.timeBarType == 'Time Elapsed') songCalc = curTime;
 
 			var secondsTotal:Int = Math.floor(songCalc / 1000);
 			if(secondsTotal < 0) secondsTotal = 0;
 
-			if(ClientPrefs.data.timeTxtType != 'Song Name')
+			if(ClientPrefs.data.timeBarType != 'Song Name' || ClientPrefs.data.timeBarType != 'Forever Engine')
 				timeTxt.text = FlxStringUtil.formatTime(secondsTotal, false);
 		}
 
