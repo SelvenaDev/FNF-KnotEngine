@@ -3130,7 +3130,16 @@ class PlayState extends MusicBeatState
 			}
 		}
 
-		var placement:Float = FlxG.width * 0.35;
+		// Keep the rating/combo close to the current camera focus instead of
+		// leaving it at one fixed HUD position while the camera changes sides.
+		var cameraPlacementOffset:Float = 0;
+		if (camFollow != null)
+		{
+			cameraPlacementOffset = (camFollow.x - (FlxG.width * 0.5)) * 0.12;
+			if (cameraPlacementOffset < -120) cameraPlacementOffset = -120;
+			if (cameraPlacementOffset > 120) cameraPlacementOffset = 120;
+		}
+		var placement:Float = FlxG.width * 0.35 + cameraPlacementOffset;
 		var rating:FlxSprite = new FlxSprite();
 		var score:Int = 350;
 
@@ -3767,6 +3776,16 @@ class PlayState extends MusicBeatState
 			if(spr != null) spr.playAnim('confirm', true);
 		}
 		else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+
+		// V-Slice-style sustain feedback: show a splash for every successfully
+		// hit sustain segment. The last segment is included as well, so the
+		// sustain gets a final splash when the long note is finished.
+		if (note.isSustainNote && !note.noteSplashData.disabled)
+		{
+			var isSustainEnd:Bool = note.nextNote == null || !note.nextNote.isSustainNote;
+			spawnHoldCoverOnNote(note, isSustainEnd);
+		}
+
 		vocals.volume = 1;
 
 		if (!note.isSustainNote)
@@ -3797,6 +3816,18 @@ class PlayState extends MusicBeatState
 			if(strum != null)
 				spawnNoteSplash(strum.x, strum.y, note.noteData, note);
 		}
+	}
+	public function spawnHoldCoverOnNote(note:Note, endCover:Bool = false) {
+		if(note != null) {
+			var strum:StrumNote = playerStrums.members[note.noteData];
+			if(strum != null)
+				spawnHoldCover(strum.x, strum.y, note.noteData, note, endCover);
+		}
+	}
+	public function spawnHoldCover(x:Float, y:Float, data:Int, ?note:Note = null, endCover:Bool = false) {
+		var splash:NoteSplash = grpNoteSplashes.recycle(NoteSplash);
+		splash.setupHoldCover(x, y, data, note, endCover);
+		grpNoteSplashes.add(splash);
 	}
 
 	public function spawnNoteSplash(x:Float, y:Float, data:Int, ?note:Note = null) {
