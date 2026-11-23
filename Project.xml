@@ -164,16 +164,19 @@
 	<!--Enable this for Nape release builds for a serious peformance improvement-->
 	<haxedef name="NAPE_RELEASE_BUILD" unless="debug"/>
 
-	<!--Used for crash handler-->
+	<!-- Native crash support. Detailed pointer/stack metadata is retained for
+	     debug and mobile crash reports, but omitted from desktop Release builds
+	     to keep x32 binaries small. HXCPP_CATCH_SEGV still catches fatal signals. -->
 	<section if="cpp">
-		<haxedef name="HXCPP_CHECK_POINTER"/>
-		<haxedef name="HXCPP_STACK_LINE"/>
-		<haxedef name="HXCPP_STACK_TRACE"/>
+		<haxedef name="HXCPP_CHECK_POINTER" if="debug || mobile"/>
+		<haxedef name="HXCPP_STACK_LINE" if="debug || mobile"/>
+		<haxedef name="HXCPP_STACK_TRACE" if="debug || mobile"/>
 		<haxedef name="HXCPP_CATCH_SEGV"/>
 	</section>
 	
-	<!-- For all Windows platforms -->
-	<app path="export\32bit\windows\bin" if="32bits"/>
+	<!-- Keep the 32-bit output override Windows-only; Linux x32 uses its own
+	     export/32bit/linux/bin directory from the build target. -->
+	<app path="export\32bit\windows\bin" if="windows 32bits"/>
 	
 	<!-- Do whatever you want I'm tired uninstall and install everytime -->
 	<certificate path="key.keystore" password="@ellawy09" alias="alafandy" alias-password="@ellawy09" if="android" unless="debug"/>
