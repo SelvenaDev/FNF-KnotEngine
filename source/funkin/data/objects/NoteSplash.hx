@@ -112,6 +112,48 @@ class NoteSplash extends FlxSprite
 			animation.curAnim.frameRate = FlxG.random.int(minFps, maxFps);
 	}
 
+	/** Sets up the separate holdCover<color> atlas used by sustain notes. */
+	public function setupHoldCover(x:Float, y:Float, direction:Int = 0, ?note:Note = null, endCover:Bool = false):Void
+	{
+		// Keep the regular splash as a safe fallback for older asset packs.
+		setupNoteSplash(x, y, direction, note);
+
+		var color:String = Note.colArray[FlxMath.wrap(direction, 0, Note.colArray.length - 1)];
+		color = color.substr(0, 1).toUpperCase() + color.substr(1);
+		var skin:String = 'noteSplashes/holdCover' + color;
+		if (endCover)
+		{
+			var endSkin:String = 'noteSplashes/holdCoverEnd' + color;
+			var endFrames = Paths.getSparrowAtlas(endSkin);
+			if (endFrames != null)
+			{
+				skin = endSkin;
+				frames = endFrames;
+			}
+			else frames = Paths.getSparrowAtlas(skin);
+		}
+		else frames = Paths.getSparrowAtlas(skin);
+		if (frames == null) return;
+
+		var animationName:String = endCover ? 'holdCoverEnd' : 'holdCover';
+		var prefixes:Array<String> = endCover
+			? ['holdCoverEnd' + color, 'holdCover end ' + color.toLowerCase(), 'holdCoverEnd ' + color.toLowerCase(), 'holdCover end']
+			: ['holdCover' + color, 'holdCover ' + color.toLowerCase(), 'holdCover' + color.toLowerCase(), 'holdCover'];
+
+		for (prefix in prefixes)
+		{
+			var animFrames:Array<FlxFrame> = [];
+			@:privateAccess animation.findByPrefix(animFrames, prefix);
+			if (animFrames.length > 0)
+			{
+				animation.addByPrefix(animationName, prefix, 24, false);
+				aliveTime = 0;
+				animation.play(animationName, true);
+				return;
+			}
+		}
+	}
+
 	public static function getSplashSkinPostfix()
 	{
 		var skin:String = '';
