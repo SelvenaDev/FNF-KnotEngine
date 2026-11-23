@@ -1,110 +1,143 @@
-name: Release
+name: Build
 
 on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  discussions: write
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+      buildArgs:
+        required: true
+        type: string
+      artifactName:
+        required: true
+        type: string
+      artifactPath:
+        required: true
+        type: string
 
 env:
+  HAXE_VERSION: 4.3.2
   PROJECT_NAME: KnotEngine
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  HXCPP_DEBUG: 0
 
 jobs:
   build:
-    name: ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-2022
-            buildArgs: "windows -final -X64 -D HXCPP_X64 -D 64bits"
-            artifactName: Windows x64
-            artifactPath: export\release\windows\bin
-          - name: Windows x32
-            os: windows-2022
-            buildArgs: "windows -final -X32 -D HXCPP_X32 -D 32bits"
-            artifactName: Windows x32
-            artifactPath: export\32bit\windows\bin
-          - name: Linux x64
-            os: ubuntu-22.04
-            buildArgs: "linux -final"
-            artifactName: Linux x64
-            artifactPath: export/release/linux/bin
-          - name: Linux x32
-            os: ubuntu-22.04
-            buildArgs: "linux -final -X32 -D HXCPP_X32 -D 32bits"
-            artifactName: Linux x32
-            artifactPath: export/32bit/linux/bin
-          - name: MacOS
-            os: macos-latest
-            buildArgs: "mac -final"
-            artifactName: MacOS
-            artifactPath: export/release/macos/bin
-          - name: Android x64
-            os: ubuntu-22.04
-            buildArgs: "android -final -ONLY_ARM64"
-            artifactName: Android x64
-            artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
-          - name: Android x32
-            os: ubuntu-22.04
-            buildArgs: "android -final -ONLY_ARMV7"
-            artifactName: Android x32
-            artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
-          - name: iOS
-            os: macos-latest
-            buildArgs: "ios -final -nosign"
-            artifactName: iOS
-            artifactPath: "export/release/ios/build/Release-iphoneos/*.ipa"
-    uses: ./.github/workflows/build.yml
-    with:
-      name: ${{ matrix.name }}
-      os: ${{ matrix.os }}
-      buildArgs: ${{ matrix.buildArgs }}
-      artifactName: ${{ matrix.artifactName }}
-      artifactPath: ${{ matrix.artifactPath }}
-
-  releaser:
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions: write-all
+    name: Build
+    runs-on: ${{ inputs.os }}
     steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: /home/runner/artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Package desktop artifacts
+      - name: Setup Java JDK
+        if: startsWith(inputs.name, 'Android')
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Setup Android SDK
+        if: startsWith(inputs.name, 'Android')
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Setup Android NDK
+        if: startsWith(inputs.name, 'Android')
+        uses: nttld/setup-ndk@main
+        id: setup-ndk
+        with:
+          ndk-version: r21e
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Install Linux dependencies
+        if: startsWith(inputs.name, 'Linux')
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y libvlc-dev libvlccore-dev
+          if [[ "${{ inputs.name }}" == "Linux x32" ]]; then
+            sudo apt-get install -y g++-multilib libc6-dev-i386
+          fi
+
+      - name: Setup XCode
+        if: inputs.name == 'iOS'
+        uses: maxim-lobanov/setup-xcode@master
+        with:
+          xcode-version: '26.6'
+
+      - name: Install Libraries
+        run: |
+          haxelib install hmm --quiet
+          haxelib run hmm install --quiet
+
+      - name: Configure Android
+        if: startsWith(inputs.name, 'Android')
+        run: |
+          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_LATEST_HOME"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+          haxelib run lime config ANDROID_SETUP true
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Compile Release
+        shell: bash
+        run: haxelib run lime build ${{ inputs.buildArgs }}
+
+      # Strip native binaries and remove symbol files. APKs are intentionally
+      # excluded because changing an APK after signing invalidates its signature.
+      - name: Strip Linux and remove symbols
+        if: startsWith(inputs.name, 'Linux')
         shell: bash
         run: |
-          cd /home/runner/artifacts
-          for dir in "Windows x64" "Windows x32" "Linux x64" "Linux x32" MacOS; do
-            [ -d "$dir" ] || continue
-            safe=$(echo "$dir" | tr ' ' '-')
-            if [[ "$dir" == Linux* || "$dir" == MacOS ]]; then
-              tar -czf "/home/runner/${{ env.PROJECT_NAME }}-${safe}.tar.gz" "$dir"
-            else
-              zip -qr "/home/runner/${{ env.PROJECT_NAME }}-${safe}.zip" "$dir"
-            fi
-          done
+          OUT="export/${{ startsWith(inputs.name, 'Linux x32') && '32bit' || 'release' }}/linux/bin"
+          find "$OUT" -type f \( -name '*.pdb' -o -name '*.ilk' -o -name '*.debug' \) -delete || true
+          find "$OUT" -type f -perm -0100 -exec strip --strip-unneeded {} + || true
+          find "$OUT" -type f -name '*.so' -exec strip --strip-unneeded {} + || true
 
-      - name: Package mobile artifacts
+      - name: Strip Windows and remove symbols
+        if: startsWith(inputs.name, 'Windows')
+        shell: pwsh
+        run: |
+          $out = if ('${{ inputs.name }}' -eq 'Windows x32') { 'export\32bit\windows\bin' } else { 'export\release\windows\bin' }
+          Get-ChildItem -Path $out -Recurse -Include *.pdb,*.ilk,*.debug -File -ErrorAction SilentlyContinue | Remove-Item -Force
+          $strip = (Get-Command llvm-strip.exe -ErrorAction SilentlyContinue).Source
+          if (-not $strip) { $strip = (Get-Command strip.exe -ErrorAction SilentlyContinue).Source }
+          if ($strip) {
+            Get-ChildItem -Path $out -Recurse -Include *.exe,*.dll -File | ForEach-Object {
+              & $strip --strip-debug $_.FullName
+            }
+          }
+
+      - name: Strip macOS and remove symbols
+        if: inputs.name == 'MacOS'
         shell: bash
         run: |
-          x64=$(find "/home/runner/artifacts/Android x64" -type f -name '*.apk' -print -quit)
-          x32=$(find "/home/runner/artifacts/Android x32" -type f -name '*.apk' -print -quit)
-          [ -z "$x64" ] || cp "$x64" "/home/runner/${{ env.PROJECT_NAME }}-Android-x64.apk"
-          [ -z "$x32" ] || cp "$x32" "/home/runner/${{ env.PROJECT_NAME }}-Android-x32.apk"
-          find /home/runner/artifacts -type f -name '*.ipa' -exec cp {} /home/runner/ \;
+          OUT="export/release/macos/bin"
+          find "$OUT" -type f \( -name '*.dSYM' -o -name '*.pdb' \) -prune -exec rm -rf {} + || true
+          find "$OUT" -type f -perm -0100 -exec xcrun strip -x {} + || true
 
-      - name: Publish The Release
-        uses: softprops/action-gh-release@v2
+      - name: Make IPA
+        if: inputs.name == 'iOS'
+        shell: bash
+        run: |
+          cd export/release/ios/build/Release-iphoneos
+          mkdir -p Payload
+          mv *.app Payload
+          zip -r "${{ env.PROJECT_NAME }}.ipa" Payload
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: "7.0.0"
-          tag_name: "7.0.0"
-          files: |
-            /home/runner/*.apk
-            /home/runner/*.ipa
-            /home/runner/*.tar.gz
-            /home/runner/*.zip
+          name: ${{ inputs.artifactName }}
+          path: ${{ inputs.artifactPath }}
+          if-no-files-found: error
