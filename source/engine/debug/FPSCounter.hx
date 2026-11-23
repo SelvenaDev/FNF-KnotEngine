@@ -113,25 +113,9 @@ class FPSCounter extends TextField
 	#if cpp
 	#if windows
 	@:functionCode('
-		SYSTEM_INFO osInfo;
-
-		GetSystemInfo(&osInfo);
-
-		switch(osInfo.wProcessorArchitecture)
-		{
-			case 9:
-				return ::String("x86_64");
-			case 5:
-				return ::String("ARM");
-			case 12:
-				return ::String("ARM64");
-			case 6:
-				return ::String("IA-64");
-			case 0:
-				return ::String("x86");
-			default:
-				return ::String("Unknown");
-		}
+		// Report the architecture of this executable, not the host OS.
+		// GetSystemInfo() can return x64 while an x86 process runs under WOW64.
+		return sizeof(void*) == 4 ? ::String("x86") : ::String("x86_64");
 	')
 	#elseif (ios || mac)
 	@:functionCode('
@@ -140,9 +124,9 @@ class FPSCounter extends TextField
 	')
 	#else
 	@:functionCode('
-		struct utsname osInfo{};
-		uname(&osInfo);
-		return ::String(osInfo.machine);
+		// uname() reports the kernel architecture, which is misleading for
+		// 32-bit binaries on a 64-bit Linux install. Use pointer width instead.
+		return sizeof(void*) == 4 ? ::String("x86") : ::String("x86_64");
 	')
 	#end
 	@:noCompletion

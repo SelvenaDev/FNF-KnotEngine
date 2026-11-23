@@ -3,20 +3,39 @@ package funkin.data.backend;
 import openfl.events.UncaughtErrorEvent;
 import openfl.events.ErrorEvent;
 import openfl.errors.Error;
+import haxe.io.Path;
 
 #if sys
 import sys.FileSystem;
 import sys.io.File;
 #end
 
+#if mobile
+import mobile.data.backend.StorageUtil;
+#end
+
 using StringTools;
-using flixel.util.FlxArrayUtil;
 
 class CrashHandler
 {
+	private static var initialized:Bool = false;
+	private static var handlingError:Bool = false;
+
 	public static function init():Void
 	{
-		openfl.Lib.current.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, onUncaughtError);
+		if (initialized) return;
+		initialized = true;
+
+		try
+		{
+			openfl.Lib.current.loaderInfo.uncaughtErrorEvents.addEventListener(
+				UncaughtErrorEvent.UNCAUGHT_ERROR, onUncaughtError);
+		}
+		catch (e:Dynamic)
+		{
+			trace('Could not register uncaught error handler: ' + safeString(e));
+		}
+
 		#if cpp
 		untyped __global__.__hxcpp_set_critical_error_handler(onError);
 		#elseif hl
@@ -26,91 +45,117 @@ class CrashHandler
 
 	private static function onUncaughtError(e:UncaughtErrorEvent):Void
 	{
-		e.preventDefault();
-		e.stopPropagation();
-		e.stopImmediatePropagation();
+		if (handlingError) return;
+		handlingError = true;
 
-		var m:String = e.error;
-		if (Std.isOfType(e.error, Error))
+		try
 		{
-			var err = cast(e.error, Error);
-			m = '${err.message}';
+			e.preventDefault();
+			e.stopPropagation();
+			e.stopImmediatePropagation();
 		}
-		else if (Std.isOfType(e.error, ErrorEvent))
-		{
-			var err = cast(e.error, ErrorEvent);
-			m = '${err.text}';
-		}
-		var stack = haxe.CallStack.exceptionStack();
-		var stackLabelArr:Array<String> = [];
-		var stackLabel:String = "";
-		for (e in stack)
-		{
-			switch (e)
-			{
-				case CFunction:
-					stackLabelArr.push("Non-Haxe (C) Function");
-				case Module(c):
-					stackLabelArr.push('Module ${c}');
-				case FilePos(parent, file, line, col):
-					switch (parent)
-					{
-						case Method(cla, func):
-							stackLabelArr.push('${file.replace('.hx', '')}.$func() [line $line]');
-						case _:
-							stackLabelArr.push('${file.replace('.hx', '')} [line $line]');
-					}
-				case LocalFunction(v):
-					stackLabelArr.push('Local Function ${v}');
-				case Method(cl, m):
-					stackLabelArr.push('${cl} - ${m}');
-			}
-		}
-		stackLabel = stackLabelArr.join('\r\n');
+		catch (_:Dynamic) {}
 
-		#if sys
-		saveErrorMessage('$m\n$stackLabel');
-		#end
-
-		CoolUtil.showPopUp('$m\n$stackLabel', "Error!");
-		#if DISCORD_ALLOWED DiscordClient.shutdown(); #end
-		lime.system.System.exit(1);
+		var message:String = formatError(e == null ? null : e.error);
+		finishCrash(message, 'Uncaught OpenFL error');
 	}
 
 	#if (cpp || hl)
 	private static function onError(message:Dynamic):Void
 	{
-		final log:Array<String> = [];
-
-		if (message != null && message.length > 0)
-			log.push(message);
-
-		log.push(haxe.CallStack.toString(haxe.CallStack.exceptionStack(true)));
-
-		#if sys
-		saveErrorMessage(log.join('\n'));
-		#end
-
-		CoolUtil.showPopUp(log.join('\n'), "Critical Error!");
-		#if DISCORD_ALLOWED DiscordClient.shutdown(); #end
-		lime.system.System.exit(1);
+		if (handlingError) return;
+		handlingError = true;
+		finishCrash(formatError(message), 'Critical runtime error');
 	}
 	#end
+
+	private static function finishCrash(message:String, kind:String):Void
+	{
+		var report:String = buildReport(kind, message);
+
+		#if sys
+		saveErrorMessage(report);
+		#end
+
+		try
+		{
+			CoolUtil.showPopUp(message, 'Error!');
+		}
+		catch (_:Dynamic)
+		{
+			trace(report);
+		}
+
+		#if DISCORD_ALLOWED
+		try DiscordClient.shutdown() catch (_:Dynamic) {}
+		#end
+
+		try
+			lime.system.System.exit(1);
+		catch (_:Dynamic)
+			trace(report);
+	}
+
+	private static function formatError(value:Dynamic):String
+	{
+		if (value == null) return 'Unknown error';
+
+		try
+		{
+			if (Std.isOfType(value, Error))
+				return Std.string(cast(value, Error).message);
+			if (Std.isOfType(value, ErrorEvent))
+				return Std.string(cast(value, ErrorEvent).text);
+			return Std.string(value);
+		}
+		catch (_:Dynamic)
+			return 'Unprintable error object';
+	}
+
+	private static function buildReport(kind:String, message:String):String
+	{
+		var lines:Array<String> = [];
+		lines.push('Knot Engine crash report');
+		lines.push('Time: ' + Date.now().toString());
+		lines.push('Type: ' + kind);
+		lines.push('Platform: ' + Main.platform);
+		lines.push('Message: ' + message);
+		lines.push('');
+		lines.push('Exception stack:');
+		try lines.push(haxe.CallStack.toString(haxe.CallStack.exceptionStack(true)))
+		catch (_:Dynamic) lines.push('<unavailable>');
+		lines.push('');
+		lines.push('Call stack:');
+		try lines.push(haxe.CallStack.toString(haxe.CallStack.callStack()))
+		catch (_:Dynamic) lines.push('<unavailable>');
+		return lines.join('\n');
+	}
+
+	private static function safeString(value:Dynamic):String
+	{
+		try return Std.string(value) catch (_:Dynamic) return '<unprintable>';
+	}
 
 	#if sys
 	private static function saveErrorMessage(message:String):Void
 	{
 		try
 		{
-			if (!FileSystem.exists('logs'))
-				FileSystem.createDirectory('logs');
+			var baseDir:String = #if mobile StorageUtil.getStorageDirectory() #else Sys.getCwd() #end;
+			if (baseDir == null || baseDir.length == 0) baseDir = Sys.getCwd();
 
-			File.saveContent('logs/'
-				+ Date.now().toString().replace(' ', '-').replace(':', "'")
-				+ '.txt', message);
+			var logDir:String = Path.join([baseDir, 'logs']);
+			if (!FileSystem.exists(logDir)) FileSystem.createDirectory(logDir);
+
+			var stamp:String = Date.now().getTime() + '';
+			var logFile:String = Path.join([logDir, 'crash-' + stamp + '.log']);
+			File.saveContent(logFile, message);
+			trace('Crash report saved to: ' + logFile);
 		}
-		catch (e:haxe.Exception)
-			trace('Couldn\'t save error message. (${e.message})');
+		catch (e:Dynamic)
+		{
+			trace('Could not save crash report: ' + safeString(e));
+		}
 	}
 	#end
 }

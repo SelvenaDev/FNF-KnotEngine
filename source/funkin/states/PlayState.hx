@@ -2030,7 +2030,12 @@ class PlayState extends MusicBeatState
 				opponentStrums.add(babyArrow);
 			}
 
+			strumLineNotes.add(babyArrow);
+			babyArrow.postAddedToGroup();
+
 			#if mobile
+			// postAddedToGroup applies the desktop lane offset. Override it only
+			// after that step so the official mobile layout stays centered.
 			if (useMobileLayout && player == 1)
 			{
 				babyArrow.updateHitbox();
@@ -2044,9 +2049,6 @@ class PlayState extends MusicBeatState
 				babyArrow.y = 55;
 			}
 			#end
-
-			strumLineNotes.add(babyArrow);
-			babyArrow.postAddedToGroup();
 		}
 	}
 	override function openSubState(SubState:FlxSubState)

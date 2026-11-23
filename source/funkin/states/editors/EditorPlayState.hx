@@ -642,7 +642,11 @@ class EditorPlayState extends MusicBeatSubstate
 				opponentStrums.add(babyArrow);
 			}
 
+			strumLineNotes.add(babyArrow);
+			babyArrow.postAddedToGroup();
+
 			#if mobile
+			// Apply the mobile layout after the default group offset.
 			if (useMobileLayout && player == 1)
 			{
 				babyArrow.updateHitbox();
@@ -656,9 +660,6 @@ class EditorPlayState extends MusicBeatSubstate
 				babyArrow.y = 55;
 			}
 			#end
-
-			strumLineNotes.add(babyArrow);
-			babyArrow.postAddedToGroup();
 		}
 	}
 

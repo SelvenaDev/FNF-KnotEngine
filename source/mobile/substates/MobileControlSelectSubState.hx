@@ -328,14 +328,14 @@ class MobileControlSelectSubState extends MusicBeatSubstate
 			var receptor:StrumNote = new StrumNote(strumLineX, strumLineY, i, 1);
 			receptor.downScroll = true;
 			receptor.updateHitbox();
+			officialPlayerStrums.add(receptor);
+			receptor.postAddedToGroup();
 			receptor.x = mobilePlayerLaneX(i) - 75;
 			if(i > 1) receptor.x = mobilePlayerLaneX(i) + 75;
 			receptor.y = FlxG.height - receptor.height - 95;
 			receptor.alpha = 1;
 			receptor.visible = true;
 			receptor.cameras = [ui];
-			officialPlayerStrums.add(receptor);
-			receptor.postAddedToGroup();
 		}
 	}
 

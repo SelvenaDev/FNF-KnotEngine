@@ -38,8 +38,10 @@ import funkin.states.TitleState;
 	public var splashAlpha:Float = 0.6;
 	public var lowQuality:Bool = false;
 	public var shaders:Bool = true;
-	public var cacheOnGPU:Bool = #if !switch false #else true #end; //From Stilic
-	public var framerate:Int = 60;
+		// Avoid repeated CPU-side bitmap uploads on mobile and lightweight
+		// desktop targets while preserving the original texture resolution.
+		public var cacheOnGPU:Bool = #if (mobile || windows || linux || switch) true #else false #end;
+		public var framerate:Int = #if mobile 120 #else 60 #end;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;
 	public var noteOffset:Int = 0;
@@ -234,11 +236,15 @@ class ClientPrefs {
 		#if (!html5 && !switch)
 		FlxG.autoPause = ClientPrefs.data.autoPause;
 
-		if(FlxG.save.data.framerate == null) {
-			final refreshRate:Int = FlxG.stage.application.window.displayMode.refreshRate;
-			data.framerate = Std.int(FlxMath.bound(refreshRate, 60, 240));
-		}
-		#end
+			if(FlxG.save.data.framerate == null) {
+				final refreshRate:Int = FlxG.stage.application.window.displayMode.refreshRate;
+				data.framerate = Std.int(FlxMath.bound(refreshRate, 60, #if mobile 120 #else 240 #end));
+			}
+			#end
+
+			// Mobile gameplay is capped at 120 FPS. Clamp old saves and high-refresh
+			// device reports without changing texture or shader quality.
+			data.framerate = Std.int(FlxMath.bound(data.framerate, 60, #if mobile 120 #else 240 #end));
 
 		if(data.framerate > FlxG.drawFramerate)
 		{
