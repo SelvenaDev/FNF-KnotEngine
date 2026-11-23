@@ -548,7 +548,7 @@ class PlayState extends MusicBeatState
 		if (ClientPrefs.data.downScroll) timeTxt.y = FlxG.height - 44;
 		#end
 
-		switch (ClientPrefs.data.timeTxtType)
+		switch (ClientPrefs.data.timeBarType)
 		{
 			case 'Song Name':
 				if (!cpuControlled) timeTxt.text = SONG.song;
@@ -576,7 +576,7 @@ class PlayState extends MusicBeatState
 		strumLineNotes = new FlxTypedGroup<StrumNote>();
 		noteGroup.add(strumLineNotes);
 
-		if(ClientPrefs.data.timeTxtType == 'Song Name')
+		if (ClientPrefs.data.timeBatType == 'Song Name' || ClientPrefs.data.timeBatType == 'Forever Engine')
 		{
 			timeTxt.size = 24;
 			timeTxt.y += 3;

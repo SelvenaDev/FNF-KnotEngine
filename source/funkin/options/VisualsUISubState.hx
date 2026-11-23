@@ -80,7 +80,7 @@ class VisualsUISubState extends BaseOptionsMenu
 		
 		var option:Option = new Option('Time Bar:',
 			"What should the Time Bar display?",
-			'timeTxtType',
+			'timeBarType',
 			'string',
 			['Time Left', 'Time Elapsed', 'Song Name', 'Forever Engine', 'Disabled']);
 		addOption(option);
@@ -111,7 +111,7 @@ class VisualsUISubState extends BaseOptionsMenu
 		addOption(option);
 
 		var option:Option = new Option('Engine Mark Style:',
-			"Wich Engine Mark it should display ?",
+			"Wich Engine Mark it should display?",
 			'enginemarkStyle',
 			'string',
 			['Kade Engine', 'Knot Engine']);
@@ -130,14 +130,14 @@ class VisualsUISubState extends BaseOptionsMenu
 		addOption(option);
 
 		var option:Option = new Option('Health Bar:',
-			"What color the Health Bar should be ?",
+			"What color the Health Bar should be?",
 			'healthColor',
 			'string',
 			['Base Game', 'Icon Color']);
 		addOption(option);
 
 		var option:Option = new Option('Health Bar Opacity',
-			'How much transparent the Health Bar and Icons should be ?',
+			'How much transparent the Health Bar and Icons should be?',
 			'healthBarAlpha',
 			'percent');
 		option.scrollSpeed = 1.6;
