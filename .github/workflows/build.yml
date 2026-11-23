@@ -44,7 +44,7 @@ jobs:
         if: startsWith(inputs.name, 'Android')
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
+          packages: ''
 
       - name: Setup Android NDK
         if: startsWith(inputs.name, 'Android')

@@ -302,7 +302,7 @@ class MobileControlSelectSubState extends MusicBeatSubstate
 	private inline function mobilePlayerNoteSpacing():Float
 	{
 		var amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
-		return Note.swagWidth * ((FlxG.height / FlxG.width) * 2.8) * amplification;
+		return Note.swagWidth * ((FlxG.height / FlxG.width) * 3.2) * amplification;
 	}
 
 	private inline function mobilePlayerLaneX(lane:Int):Float
