@@ -87,13 +87,23 @@ class CrashHandler
 		}
 
 		#if DISCORD_ALLOWED
-		try DiscordClient.shutdown() catch (_:Dynamic) {}
+		try
+		{
+			DiscordClient.shutdown();
+		}
+		catch (_:Dynamic)
+		{
+		}
 		#end
 
 		try
+		{
 			lime.system.System.exit(1);
+		}
 		catch (_:Dynamic)
+		{
 			trace(report);
+		}
 	}
 
 	private static function formatError(value:Dynamic):String
@@ -109,7 +119,9 @@ class CrashHandler
 			return Std.string(value);
 		}
 		catch (_:Dynamic)
+		{
 			return 'Unprintable error object';
+		}
 	}
 
 	private static function buildReport(kind:String, message:String):String
@@ -122,19 +134,38 @@ class CrashHandler
 		lines.push('Message: ' + message);
 		lines.push('');
 		lines.push('Exception stack:');
-		try lines.push(haxe.CallStack.toString(haxe.CallStack.exceptionStack(true)))
-		catch (_:Dynamic) lines.push('<unavailable>');
+		try
+		{
+			lines.push(haxe.CallStack.toString(haxe.CallStack.exceptionStack(true)));
+		}
+		catch (_:Dynamic)
+		{
+			lines.push('<unavailable>');
+		}
 		lines.push('');
 		lines.push('Call stack:');
-		try lines.push(haxe.CallStack.toString(haxe.CallStack.callStack()))
-		catch (_:Dynamic) lines.push('<unavailable>');
+		try
+		{
+			lines.push(haxe.CallStack.toString(haxe.CallStack.callStack()));
+		}
+		catch (_:Dynamic)
+		{
+			lines.push('<unavailable>');
+		}
 		return lines.join('\n');
 	}
 
-	private static function safeString(value:Dynamic):String
-	{
-		try return Std.string(value) catch (_:Dynamic) return '<unprintable>';
-	}
+		private static function safeString(value:Dynamic):String
+		{
+			try
+			{
+				return Std.string(value);
+			}
+			catch (_:Dynamic)
+			{
+				return '<unprintable>';
+			}
+		}
 
 	#if sys
 	private static function saveErrorMessage(message:String):Void
