@@ -274,15 +274,24 @@ class Paths
 		}
 
 		localTrackedAssets.push(file);
+			#if mobile
 			if (allowGPU && ClientPrefs.data.cacheOnGPU && FlxG.stage != null && FlxG.stage.context3D != null)
-		{
-			var texture:RectangleTexture = FlxG.stage.context3D.createRectangleTexture(bitmap.width, bitmap.height, BGRA, true);
-			texture.uploadFromBitmapData(bitmap);
-			bitmap.image.data = null;
-			bitmap.dispose();
-			bitmap.disposeImage();
-			bitmap = BitmapData.fromTexture(texture);
-		}
+			{
+				try
+				{
+					var texture:RectangleTexture = FlxG.stage.context3D.createRectangleTexture(bitmap.width, bitmap.height, BGRA, true);
+					texture.uploadFromBitmapData(bitmap);
+					bitmap.image.data = null;
+					bitmap.dispose();
+					bitmap.disposeImage();
+					bitmap = BitmapData.fromTexture(texture);
+				}
+				catch (e:Dynamic)
+				{
+					trace('GPU texture cache unavailable; using regular bitmap: ' + e);
+				}
+			}
+			#end
 		var newGraphic:FlxGraphic = FlxGraphic.fromBitmapData(bitmap, false, file);
 		newGraphic.persist = true;
 		newGraphic.destroyOnNoUse = false;

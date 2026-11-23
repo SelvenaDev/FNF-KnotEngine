@@ -40,7 +40,7 @@ import funkin.states.TitleState;
 	public var shaders:Bool = true;
 		// Avoid repeated CPU-side bitmap uploads on mobile and lightweight
 		// desktop targets while preserving the original texture resolution.
-		public var cacheOnGPU:Bool = #if (mobile || windows || linux || switch) true #else false #end;
+		public var cacheOnGPU:Bool = #if mobile true #else false #end;
 		public var framerate:Int = #if mobile 120 #else 60 #end;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;

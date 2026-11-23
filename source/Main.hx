@@ -165,28 +165,34 @@ class Main extends Sprite
 		FlxG.scaleMode = new MobileScaleMode();
 		#end
 
-		// shader coords fix
+		#if mobile
+		// Mobile shader-coordinate fix. Do not clear OpenFL's internal bitmap
+		// caches on desktop: doing so can leave the Windows render surface black
+		// or transparent after the first resize/fullscreen event.
 		FlxG.signals.gameResized.add(function (w, h) {
 			if(fpsVar != null)
 				fpsVar.positionFPS(10, 3, Math.min(Lib.current.stage.stageWidth / FlxG.width, Lib.current.stage.stageHeight / FlxG.height));
-		     if (FlxG.cameras != null) {
-			   for (cam in FlxG.cameras.list) {
-				if (cam != null && cam.filters != null)
-					resetSpriteCache(cam.flashSprite);
-			   }
+			if (FlxG.cameras != null) {
+				for (cam in FlxG.cameras.list) {
+					if (cam != null && cam.filters != null)
+						resetSpriteCache(cam.flashSprite);
+				}
 			}
 
 			if (FlxG.game != null)
-			resetSpriteCache(FlxG.game);
+				resetSpriteCache(FlxG.game);
 		});
+		#end
 	}
 
+	#if mobile
 	static function resetSpriteCache(sprite:Sprite):Void {
 		@:privateAccess {
-		        sprite.__cacheBitmap = null;
-			sprite.__cacheBitmapData = null;
+				sprite.__cacheBitmap = null;
+				sprite.__cacheBitmapData = null;
 		}
 	}
+	#end
 
 	function toggleFullScreen(event:KeyboardEvent){
 		if(Controls.instance.justReleased('fullscreen'))
