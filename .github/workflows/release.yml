@@ -38,7 +38,7 @@ jobs:
             artifactName: Linux x32
             artifactPath: export/32bit/linux/bin
           - name: MacOS
-            os: macos-15
+            os: macos-latest
             buildArgs: "mac -final"
             artifactName: MacOS
             artifactPath: export/release/macos/bin
@@ -53,7 +53,7 @@ jobs:
             artifactName: Android x32
             artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
           - name: iOS
-            os: macos-15
+            os: macos-latest
             buildArgs: "ios -final -nosign"
             artifactName: iOS
             artifactPath: "export/release/ios/build/Release-iphoneos/*.ipa"
