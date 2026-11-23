@@ -1,5 +1,7 @@
 name: Release
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,6 +14,7 @@ jobs:
   build:
     name: ${{ matrix.name }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: Windows x64
@@ -24,11 +27,16 @@ jobs:
             buildArgs: "windows -final -X32 -D HXCPP_X32 -D 32bits"
             artifactName: Windows x32
             artifactPath: export\32bit\windows\bin
-          - name: Linux
+          - name: Linux x64
             os: ubuntu-22.04
             buildArgs: "linux -final"
-            artifactName: Linux
+            artifactName: Linux x64
             artifactPath: export/release/linux/bin
+          - name: Linux x32
+            os: ubuntu-22.04
+            buildArgs: "linux -final -X32 -D HXCPP_X32 -D 32bits"
+            artifactName: Linux x32
+            artifactPath: export/32bit/linux/bin
           - name: MacOS
             os: macos-15
             buildArgs: "mac -final"
@@ -51,99 +59,52 @@ jobs:
             artifactPath: "export/release/ios/build/Release-iphoneos/*.ipa"
     uses: ./.github/workflows/build.yml
     with:
-        name: ${{ matrix.name }}
-        os: ${{ matrix.os }}
-        buildArgs: ${{ matrix.buildArgs }}
-        artifactName: ${{ matrix.artifactName }}
-        artifactPath: ${{ matrix.artifactPath }}
+      name: ${{ matrix.name }}
+      os: ${{ matrix.os }}
+      buildArgs: ${{ matrix.buildArgs }}
+      artifactName: ${{ matrix.artifactName }}
+      artifactPath: ${{ matrix.artifactPath }}
 
-  Releaser:
+  releaser:
     needs: [build]
     runs-on: ubuntu-latest
     permissions: write-all
     steps:
-      - name: Download Windows x64 Build
-        uses: actions/download-artifact@main
-        with:
-          name: Windows x64
-          path: /home/runner/Windows-x64
-
-      - name: Zip Windows x64 Build For Release
-        run: |
-          cd /home/runner/Windows-x64
-          zip -r "/home/runner/${{ env.PROJECT_NAME }}-Windows-x64.zip" .
-
-      - name: Download Windows x32 Build
-        uses: actions/download-artifact@main
-        with:
-          name: Windows x32
-          path: /home/runner/Windows-x32
-
-      - name: Zip Windows x32 Build For Release
-        run: |
-          cd /home/runner/Windows-x32
-          zip -r "/home/runner/${{ env.PROJECT_NAME }}-Windows-x32.zip" .
-
-      - name: Download Linux Build
-        uses: actions/download-artifact@main
-        with:
-          name: Linux
-          path: /home/runner/Linux
-
-      - name: Tar Linux Build For Release
-        run: |
-          cd /home/runner/Linux
-          tar czf "/home/runner/${{ env.PROJECT_NAME }}-Linux.tar" .
-
-      - name: Download MacOS Build
-        uses: actions/download-artifact@main
-        with:
-          name: MacOS
-          path: /home/runner/MacOS
-
-      - name: Tar MacOS Build For Release
-        run: |
-          cd /home/runner/MacOS
-          tar czf "/home/runner/${{ env.PROJECT_NAME }}-MacOS.tar" .
-
-      - name: Download Android x64 Build
-        uses: actions/download-artifact@main
-        with:
-          name: Android x64
-          path: /home/runner
-
-      - name: Move Android x64 File
-        run: mv /home/runner/${{ env.PROJECT_NAME }}-release.apk /home/runner/${{ env.PROJECT_NAME }}-Android-x64.apk
-
-      - name: Download Android x32 Build
-        uses: actions/download-artifact@main
-        with:
-          name: Android x32
-          path: /home/runner
-
-      - name: Move Android x32 File
-        run: mv /home/runner/${{ env.PROJECT_NAME }}-release.apk /home/runner/${{ env.PROJECT_NAME }}-Android-x32.apk
-
-      - name: Download iOS Build
-        uses: actions/download-artifact@main
-        with:
-          name: iOS
-          path: ${{ github.workspace }}
-
-      - name: Move iOS File
-        run: mv ${{ github.workspace }}/${{ env.PROJECT_NAME }}.ipa /home/runner/${{ env.PROJECT_NAME }}-iOS.ipa
-
-      - name: Download all workflow run artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: /home/runner/artifacts
+
+      - name: Package desktop artifacts
+        shell: bash
+        run: |
+          cd /home/runner/artifacts
+          for dir in "Windows x64" "Windows x32" "Linux x64" "Linux x32" MacOS; do
+            [ -d "$dir" ] || continue
+            safe=$(echo "$dir" | tr ' ' '-')
+            if [[ "$dir" == Linux* || "$dir" == MacOS ]]; then
+              tar -czf "/home/runner/${{ env.PROJECT_NAME }}-${safe}.tar.gz" "$dir"
+            else
+              zip -qr "/home/runner/${{ env.PROJECT_NAME }}-${safe}.zip" "$dir"
+            fi
+          done
+
+      - name: Package mobile artifacts
+        shell: bash
+        run: |
+          x64=$(find "/home/runner/artifacts/Android x64" -type f -name '*.apk' -print -quit)
+          x32=$(find "/home/runner/artifacts/Android x32" -type f -name '*.apk' -print -quit)
+          [ -z "$x64" ] || cp "$x64" "/home/runner/${{ env.PROJECT_NAME }}-Android-x64.apk"
+          [ -z "$x32" ] || cp "$x32" "/home/runner/${{ env.PROJECT_NAME }}-Android-x32.apk"
+          find /home/runner/artifacts -type f -name '*.ipa' -exec cp {} /home/runner/ \;
 
       - name: Publish The Release
         uses: softprops/action-gh-release@v2
         with:
           name: "7.0.0"
           tag_name: "7.0.0"
-          last_release: false
           files: |
             /home/runner/*.apk
             /home/runner/*.ipa
-            /home/runner/*.tar
+            /home/runner/*.tar.gz
             /home/runner/*.zip
