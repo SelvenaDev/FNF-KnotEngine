@@ -23,6 +23,7 @@ env:
   HAXE_VERSION: 4.3.2
   PROJECT_NAME: KnotEngine
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  HXCPP_DEBUG: 0
 
 jobs:
   build:
@@ -30,7 +31,7 @@ jobs:
     runs-on: ${{ inputs.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
 
       - name: Setup Android NDK
         if: startsWith(inputs.name, 'Android')
@@ -41,30 +42,29 @@ jobs:
 
       - name: Setup Java JDK
         if: startsWith(inputs.name, 'Android')
-        uses: actions/setup-java@main
+        uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: 18
+          distribution: zulu
+          java-version: '18'
 
       - name: Setup Android SDK
         if: startsWith(inputs.name, 'Android')
-        uses: android-actions/setup-android@main
+        uses: android-actions/setup-android@v3
 
       - name: Setup Haxe
         uses: krdlab/setup-haxe@master
         with:
           haxe-version: ${{ env.HAXE_VERSION }}
 
-      - name: Update APT
-        if: inputs.name == 'Linux'
+      - name: Install Linux dependencies
+        if: startsWith(inputs.name, 'Linux')
         run: |
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          sudo apt-get update --fix-missing
-
-      - name: Install libVLC
-        if: inputs.name == 'Linux'
-        run: sudo apt-get install -y libvlc-dev libvlccore-dev
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y libvlc-dev libvlccore-dev
+          if [[ "${{ inputs.name }}" == "Linux x32" ]]; then
+            sudo apt-get install -y g++-multilib libc6-dev-i386
+          fi
 
       - name: Setup XCode
         if: inputs.name == 'iOS'
@@ -82,24 +82,59 @@ jobs:
         run: |
           haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
           haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_LATEST_HOME"
-          haxelib run lime config JAVA_HOME "$JAVA_HOME_17_arm64"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
           haxelib run lime config ANDROID_SETUP true
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: Compile
+      - name: Compile Release
+        shell: bash
         run: haxelib run lime build ${{ inputs.buildArgs }}
+
+      # Strip native binaries and remove symbol files. APKs are intentionally
+      # excluded because changing an APK after signing invalidates its signature.
+      - name: Strip Linux and remove symbols
+        if: startsWith(inputs.name, 'Linux')
+        shell: bash
+        run: |
+          OUT="export/${{ startsWith(inputs.name, 'Linux x32') && '32bit' || 'release' }}/linux/bin"
+          find "$OUT" -type f \( -name '*.pdb' -o -name '*.ilk' -o -name '*.debug' \) -delete || true
+          find "$OUT" -type f -perm -0100 -exec strip --strip-unneeded {} + || true
+          find "$OUT" -type f -name '*.so' -exec strip --strip-unneeded {} + || true
+
+      - name: Strip Windows and remove symbols
+        if: startsWith(inputs.name, 'Windows')
+        shell: pwsh
+        run: |
+          $out = if ('${{ inputs.name }}' -eq 'Windows x32') { 'export\32bit\windows\bin' } else { 'export\release\windows\bin' }
+          Get-ChildItem -Path $out -Recurse -Include *.pdb,*.ilk,*.debug -File -ErrorAction SilentlyContinue | Remove-Item -Force
+          $strip = (Get-Command llvm-strip.exe -ErrorAction SilentlyContinue).Source
+          if (-not $strip) { $strip = (Get-Command strip.exe -ErrorAction SilentlyContinue).Source }
+          if ($strip) {
+            Get-ChildItem -Path $out -Recurse -Include *.exe,*.dll -File | ForEach-Object {
+              & $strip --strip-debug $_.FullName
+            }
+          }
+
+      - name: Strip macOS and remove symbols
+        if: inputs.name == 'MacOS'
+        shell: bash
+        run: |
+          OUT="export/release/macos/bin"
+          find "$OUT" -type f \( -name '*.dSYM' -o -name '*.pdb' \) -prune -exec rm -rf {} + || true
+          find "$OUT" -type f -perm -0100 -exec xcrun strip -x {} + || true
 
       - name: Make IPA
         if: inputs.name == 'iOS'
+        shell: bash
         run: |
           cd export/release/ios/build/Release-iphoneos
-          mkdir Payload
+          mkdir -p Payload
           mv *.app Payload
-          zip -r ${{ env.PROJECT_NAME }}.ipa Payload
+          zip -r "${{ env.PROJECT_NAME }}.ipa" Payload
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifactName }}
           path: ${{ inputs.artifactPath }}
