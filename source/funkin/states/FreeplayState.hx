@@ -232,12 +232,54 @@ class FreeplayState extends MusicBeatState
 		#end
 	}
 
-	public function addSong(songName:String, weekNum:Int, songCharacter:String, color:Int)
-	{
-		songs.push(new SongMetadata(songName, weekNum, songCharacter, color));
-	}
+		public function addSong(songName:String, weekNum:Int, songCharacter:String, color:Int)
+		{
+			songs.push(new SongMetadata(songName, weekNum, songCharacter, color));
+		}
 
-	function weekIsLocked(name:String):Bool {
+		private var songTransitionStarted:Bool = false;
+
+		private function playSongSelectionTransition(openChart:Bool):Void
+		{
+			if (songTransitionStarted) return;
+			songTransitionStarted = true;
+
+			var remaining:Int = 0;
+			for (songItem in grpSongs.members)
+			{
+				if (songItem != null) remaining++;
+			}
+
+			if (remaining == 0)
+			{
+				if (openChart) LoadingState.loadAndSwitchState(new ChartingState());
+				else LoadingState.loadAndSwitchState(new PlayState());
+				return;
+			}
+
+			for (songItem in grpSongs.members)
+			{
+				if (songItem == null) continue;
+				// Freeplay uses one direction only: the complete song list
+				// slides left, without splitting or falling downward.
+				var targetX:Float = songItem.x - FlxG.width - 180;
+				FlxTween.tween(songItem, {x: targetX, alpha: 0}, 0.55,
+				{
+					ease: FlxEase.quadIn,
+					onComplete: function(slideTween:FlxTween)
+					{
+						remaining--;
+						if (remaining <= 0)
+						{
+							if (openChart) LoadingState.loadAndSwitchState(new ChartingState());
+							else LoadingState.loadAndSwitchState(new PlayState());
+						}
+					}
+				});
+			}
+		}
+
+		function weekIsLocked(name:String):Bool {
 		var leWeek:WeekData = WeekData.weeksLoaded.get(name);
 		return (!leWeek.startUnlocked && leWeek.weekBefore.length > 0 && (!StoryMenuState.weekCompleted.exists(leWeek.weekBefore) || !StoryMenuState.weekCompleted.get(leWeek.weekBefore)));
 	}
@@ -458,11 +500,8 @@ class FreeplayState extends MusicBeatState
 				return;
 			}
 
-			if((FlxG.keys.pressed.SHIFT || FlxG.keys.justPressed.SHIFT || touchPad.buttonZ.pressed || touchPad.buttonZ.justPressed) && !player.playingMusic) {
-				LoadingState.loadAndSwitchState(new ChartingState());
-			} else {
-				LoadingState.loadAndSwitchState(new PlayState());
-			}
+				var openChart:Bool = (FlxG.keys.pressed.SHIFT || FlxG.keys.justPressed.SHIFT || touchPad.buttonZ.pressed || touchPad.buttonZ.justPressed) && !player.playingMusic;
+				playSongSelectionTransition(openChart);
 
 			FlxG.sound.music.volume = 0;
 					
@@ -569,11 +608,8 @@ class FreeplayState extends MusicBeatState
 				return;
 			}
 
-			if((FlxG.keys.pressed.SHIFT || FlxG.keys.justPressed.SHIFT) && !player.playingMusic) {
-				LoadingState.loadAndSwitchState(new ChartingState());
-			} else {
-				LoadingState.loadAndSwitchState(new PlayState());
-			}
+				var openChart:Bool = (FlxG.keys.pressed.SHIFT || FlxG.keys.justPressed.SHIFT) && !player.playingMusic;
+				playSongSelectionTransition(openChart);
 
 			FlxG.sound.music.volume = 0;
 					
@@ -712,9 +748,12 @@ class FreeplayState extends MusicBeatState
 
 	var _drawDistance:Int = 4;
 	var _lastVisibles:Array<Int> = [];
-	public function updateTexts(elapsed:Float = 0.0)
-	{
-		lerpSelected = FlxMath.lerp(curSelected, lerpSelected, Math.exp(-elapsed * 9.6));
+		public function updateTexts(elapsed:Float = 0.0)
+		{
+			// Do not recenter/reposition the song items while the exit tween is
+			// running, otherwise the normal Freeplay layout cancels the slide.
+			if (songTransitionStarted) return;
+			lerpSelected = FlxMath.lerp(curSelected, lerpSelected, Math.exp(-elapsed * 9.6));
 		
 		for (i in _lastVisibles)
 		{

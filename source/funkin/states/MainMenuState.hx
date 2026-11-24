@@ -190,58 +190,7 @@ class MainMenuState extends MusicBeatState
 			#if mobile
 			if (controls.ACCEPT)
 			{
-				FlxG.sound.play(Paths.sound('confirmMenu'));
-				
-				selectedSomethin = true;
-
-				if (ClientPrefs.data.flashing)
-					FlxFlicker.flicker(magenta, 1.1, 0.15, false);
-
-				FlxFlicker.flicker(menuItems.members[curSelected], 1, 0.06, false, false, function(flick:FlxFlicker)
-				{
-					switch (optionShit[curSelected])
-					{
-						case 'story_mode':
-							MusicBeatState.switchState(new StoryMenuState());
-						case 'freeplay':
-							MusicBeatState.switchState(new FreeplayState());
-
-						#if MODS_ALLOWED
-						case 'mods':
-							MusicBeatState.switchState(new ModsMenuState());
-						#end
-
-						#if ACHIEVEMENTS_ALLOWED
-						case 'awards':
-							MusicBeatState.switchState(new AchievementsMenuState());
-						#end
-
-						case 'credits':
-							MusicBeatState.switchState(new CreditsState());
-						case 'options':
-							MusicBeatState.switchState(new OptionsState());
-							OptionsState.onPlayState = false;
-						if (PlayState.SONG != null)
-						{
-							PlayState.SONG.arrowSkin = null;
-							PlayState.SONG.splashSkin = null;
-							PlayState.stageUI = 'normal';
-						}
-					}
-				});
-
-				for (i in 0...menuItems.members.length)
-				{
-					if (i == curSelected)
-						continue;
-					FlxTween.tween(menuItems.members[i], {alpha: 0}, 0.4, {
-						ease: FlxEase.quadOut,
-						onComplete: function(twn:FlxTween)
-						{
-							menuItems.members[i].kill();
-						}
-					});
-				}
+				confirmMenuSelection();
 			}
 			else if (controls.justPressed('debug_1') || touchPad.buttonE.justPressed)
 			{
@@ -251,58 +200,7 @@ class MainMenuState extends MusicBeatState
 			#else
 			if (controls.ACCEPT)
 			{
-				FlxG.sound.play(Paths.sound('confirmMenu'));
-				
-				selectedSomethin = true;
-
-				if (ClientPrefs.data.flashing)
-					FlxFlicker.flicker(magenta, 1.1, 0.15, false);
-
-				FlxFlicker.flicker(menuItems.members[curSelected], 1, 0.06, false, false, function(flick:FlxFlicker)
-				{
-					switch (optionShit[curSelected])
-					{
-						case 'story_mode':
-							MusicBeatState.switchState(new StoryMenuState());
-						case 'freeplay':
-							MusicBeatState.switchState(new FreeplayState());
-
-						#if MODS_ALLOWED
-						case 'mods':
-							MusicBeatState.switchState(new ModsMenuState());
-						#end
-
-						#if ACHIEVEMENTS_ALLOWED
-						case 'awards':
-							MusicBeatState.switchState(new AchievementsMenuState());
-						#end
-
-						case 'credits':
-							MusicBeatState.switchState(new CreditsState());
-						case 'options':
-							MusicBeatState.switchState(new OptionsState());
-							OptionsState.onPlayState = false;
-						if (PlayState.SONG != null)
-						{
-							PlayState.SONG.arrowSkin = null;
-							PlayState.SONG.splashSkin = null;
-							PlayState.stageUI = 'normal';
-						}
-					}
-				});
-
-				for (i in 0...menuItems.members.length)
-				{
-					if (i == curSelected)
-						continue;
-					FlxTween.tween(menuItems.members[i], {alpha: 0}, 0.4, {
-						ease: FlxEase.quadOut,
-						onComplete: function(twn:FlxTween)
-						{
-							menuItems.members[i].kill();
-						}
-					});
-				}
+				confirmMenuSelection();
 			}
 			else if (controls.justPressed('debug_1'))
 			{
@@ -313,6 +211,80 @@ class MainMenuState extends MusicBeatState
 		}
 
 		super.update(elapsed);
+	}
+
+	private function confirmMenuSelection():Void
+	{
+		FlxG.sound.play(Paths.sound('confirmMenu'));
+		selectedSomethin = true;
+
+		if (ClientPrefs.data.flashing)
+			FlxFlicker.flicker(magenta, 1.1, 0.15, false);
+
+			var selectedIndex:Int = curSelected;
+			var selectedItem:FlxSprite = menuItems.members[selectedIndex];
+			var originalX:Float = selectedItem.x;
+
+			// The selected menu item moves horizontally to the right only.
+			// Do not change Y here, otherwise it appears to move diagonally.
+			FlxTween.tween(selectedItem, {x: originalX + 220}, 0.2,
+		{
+			ease: FlxEase.quadOut,
+			onComplete: function(firstTween:FlxTween)
+			{
+					FlxTween.tween(selectedItem, {x: originalX}, 0.48,
+				{
+					ease: FlxEase.bounceOut,
+					onComplete: function(landingTween:FlxTween)
+					{
+							for (i in 0...menuItems.members.length)
+							{
+								var item:FlxSprite = menuItems.members[i];
+								if (item == null) continue;
+								// Keep Main Menu consistent with Freeplay: no split and no
+								// downward fall. Slide every menu item to the left.
+								var slideX:Float = item.x - FlxG.width - 180;
+								FlxTween.tween(item, {x: slideX, alpha: 0}, 0.55,
+								{
+									ease: FlxEase.quadIn,
+									onComplete: function(slideTween:FlxTween)
+									{
+										if (item == selectedItem)
+											switchToSelectedMenu();
+									}
+								});
+							}
+					}
+				});
+			}
+		});
+	}
+
+	private function switchToSelectedMenu():Void
+	{
+		switch (optionShit[curSelected])
+		{
+			case 'story_mode':
+				MusicBeatState.switchState(new StoryMenuState());
+			case 'freeplay':
+				MusicBeatState.switchState(new FreeplayState());
+
+			#if MODS_ALLOWED
+			case 'mods':
+				MusicBeatState.switchState(new ModsMenuState());
+			#end
+
+			#if ACHIEVEMENTS_ALLOWED
+			case 'awards':
+				MusicBeatState.switchState(new AchievementsMenuState());
+			#end
+
+			case 'credits':
+				MusicBeatState.switchState(new CreditsState());
+			case 'options':
+				OptionsState.onPlayState = false;
+				MusicBeatState.switchState(new OptionsState());
+		}
 	}
 
 	function changeItem(huh:Int = 0)

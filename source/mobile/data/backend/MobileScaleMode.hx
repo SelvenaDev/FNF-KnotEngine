@@ -6,6 +6,19 @@ class MobileScaleMode extends BaseScaleMode
 {
 	public static var allowWideScreen(default, set):Bool = true;
 
+	public static function refresh():Void
+	{
+		// Recreate the scale mode immediately after the option changes. This
+		// forces Flixel to recalculate gameSize and removes stale letterbox
+		// offsets instead of waiting for the next orientation/resize event.
+		FlxG.scaleMode = new MobileScaleMode();
+		if (ClientPrefs.data.wideScreen && allowWideScreen)
+		{
+			FlxG.game.x = 0;
+			FlxG.game.y = 0;
+		}
+	}
+
 	override function updateGameSize(Width:Int, Height:Int):Void
 	{
 		if (ClientPrefs.data.wideScreen && allowWideScreen)

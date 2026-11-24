@@ -1,453 +1,141 @@
-package mobile.substates;
+package mobile.options;
 
-import flixel.FlxObject;
-import flixel.addons.display.FlxBackdrop;
-import flixel.addons.display.FlxGridOverlay;
-import flixel.util.FlxGradient;
+import mobile.data.backend.MobileScaleMode;
+import mobile.data.backend.MobileData;
 
-import funkin.data.objects.Note;
-import funkin.data.objects.StrumNote;
-import mobile.data.backend.TouchUtil;
+import flixel.input.keyboard.FlxKey;
 
-import flixel.input.touch.FlxTouch;
-import flixel.ui.FlxButton as UIButton;
+import funkin.options.BaseOptionsMenu;
+import funkin.options.Option;
 
-class MobileControlSelectSubState extends MusicBeatSubstate
+class MobileOptionsSubState extends BaseOptionsMenu
 {
-	var options:Array<String> = [
-		'Pad-Right',
-		'Pad-Left',
-		'Pad-Custom',
-		'Hitbox',
-		'Official'
-	];
-	var control:MobileControls;
-	var officialPlayerStrums:FlxTypedGroup<StrumNote>;
-	var officialStrumTouchState:Array<Bool> = [false, false, false, false];
-
-	var leftArrow:FlxSprite;
-	var rightArrow:FlxSprite;
-
-	var itemText:Alphabet;
-	var positionText:FlxText;
-	var positionTextBg:FlxSprite;
-
-	var bg:FlxBackdrop;
-	var ui:FlxCamera;
-	var curOption:Int = MobileData.mode;
-
-	var buttonBinded:Bool = false;
-	var bindButton:TouchButton;
-	var reset:UIButton;
-	var tweenieShit:Float = 0;
+	#if android
+	var storageTypes:Array<String> = ["EXTERNAL_DATA", "EXTERNAL_OBB", "EXTERNAL_MEDIA", "EXTERNAL"];
+	var externalPaths:Array<String> = StorageUtil.checkExternalPaths(true);
+	final lastStorageType:String = ClientPrefs.data.storageType;
+	#end
+	final exControlTypes:Array<String> = ["NONE", "SINGLE", "DOUBLE"];
+	final hintOptions:Array<String> = ["No Gradient", "No Gradient (Old)", "Gradient", "Hidden"];
+	var option:Option;
 
 	public function new()
 	{
+		#if android if (!externalPaths.contains('\n'))
+			storageTypes = storageTypes.concat(externalPaths); #end
+		title = 'Mobile Options';
+		rpcTitle = 'Mobile Options Menu'; // for Discord Rich Presence, fuck it
+
+		option = new Option('Extra Controls',
+			"Select how many extra buttons you prefer to have?\nThey can be used for mechanics with LUA or HScript.",
+			'extraButtons',
+			'string',
+			exControlTypes);
+		addOption(option);
+
+		option = new Option('Mobile Controls Opacity',
+			"Selects the opacity for the mobile buttons (careful not to put it at 0 and lose track of your buttons).",
+			'controlsAlpha',
+			'percent');
+		option.scrollSpeed = 1;
+		option.minValue = 0.001;
+		option.maxValue = 1;
+		option.changeValue = 0.1;
+		option.decimals = 1;
+		option.onChange = () ->
+		{
+			touchPad.alpha = curOption.getValue();
+			ClientPrefs.toggleVolumeKeys();
+		};
+		addOption(option);
+
+		#if mobile
+		option = new Option('Allow Phone Screensaver',
+			"If checked, the phone will sleep after going inactive for few seconds.\n(The time depends on your phone\'s options)",
+			'screensaver',
+			'bool');
+		option.onChange = () -> lime.system.System.allowScreenTimeout = curOption.getValue();
+		addOption(option);
+
+			option = new Option('Remove Black Bars',
+				"If checked, the game stretches to fill the whole screen instead of keeping black bars.",
+				'wideScreen',
+				'bool');
+			option.onChange = () -> MobileScaleMode.refresh();
+			addOption(option);
+		#end
+
+		if (MobileData.mode == 3)
+		{
+			option = new Option('Hitbox Design',
+				"Choose how your hitbox should look like.",
+				'hitboxType',
+				'string',
+				hintOptions);
+			addOption(option);
+
+			option = new Option('Hitbox Position',
+				"If checked, the hitbox will be put at the bottom of the screen, otherwise will stay at the top.",
+				'hitboxPos',
+				'bool');
+			addOption(option);
+		}
+
+		option = new Option('Dynamic Controls Color',
+			"If checked, the mobile controls color will be set to the notes color in your settings.\n(have effect during gameplay only)",
+			'dynamicColors',
+			'bool');
+		addOption(option);
+
+		#if android
+		option = new Option('Storage Type',
+			"Which folder Psych Engine should use?\n(CHANGING THIS MAKES DELETE YOUR OLD FOLDER!!)",
+			'storageType',
+			'string',
+			storageTypes);
+		addOption(option);
+		#end
+
+		#if android
+		option = new Option('Pause Button',
+			"If unchecked, remove pause button from play zone.\n(you can use BACK button in both cases)",
+			'pauseButton',
+			'bool');
+		addOption(option);
+
+		#end
+
 		super();
-		if (ClientPrefs.data.extraButtons != 'NONE')
-			options.push('Pad-Extra');
-
-		bg = new FlxBackdrop(FlxGridOverlay.createGrid(80, 80, 160, 160, true,
-			FlxColor.fromRGB(FlxG.random.int(0, 255), FlxG.random.int(0, 255), FlxG.random.int(0, 255)),
-			FlxColor.fromRGB(FlxG.random.int(0, 255), FlxG.random.int(0, 255), FlxG.random.int(0, 255))));
-		bg.velocity.set(40, 40);
-		bg.alpha = 0;
-		bg.antialiasing = ClientPrefs.data.antialiasing;
-		FlxTween.tween(bg, {alpha: 0.45}, 0.3, {
-			ease: FlxEase.quadOut,
-			onComplete: (twn:FlxTween) ->
-			{
-				FlxTween.tween(ui, {alpha: 1}, 0.2, {ease: FlxEase.circOut});
-			}
-		});
-		add(bg);
-
-		FlxG.mouse.visible = !FlxG.onMobile;
-
-		ui = new FlxCamera();
-		ui.bgColor.alpha = 0;
-		ui.alpha = 0;
-		FlxG.cameras.add(ui, false);
-
-		itemText = new Alphabet(0, 60, '');
-		itemText.alignment = LEFT;
-		itemText.cameras = [ui];
-		add(itemText);
-
-		leftArrow = new FlxSprite(0, itemText.y - 25);
-		leftArrow.frames = Paths.getSparrowAtlas('campaign_menu_UI_assets');
-		leftArrow.animation.addByPrefix('idle', 'arrow left');
-		leftArrow.animation.addByPrefix('press', "arrow push left");
-		leftArrow.animation.play('idle');
-		leftArrow.cameras = [ui];
-		add(leftArrow);
-
-		itemText.x = leftArrow.width + 70;
-		leftArrow.x = itemText.x - 60;
-
-		rightArrow = new FlxSprite().loadGraphicFromSprite(leftArrow);
-		rightArrow.flipX = true;
-		rightArrow.setPosition(itemText.x + itemText.width + 10, itemText.y - 25);
-		rightArrow.cameras = [ui];
-		add(rightArrow);
-
-		positionText = new FlxText(0, FlxG.height, FlxG.width / 4, '');
-		positionText.setFormat(Paths.font("vcr.ttf"), 18, FlxColor.WHITE, FlxTextAlign.LEFT);
-		positionText.visible = false;
-
-		positionTextBg = FlxGradient.createGradientFlxSprite(250, 150, [FlxColor.BLACK, FlxColor.BLACK, FlxColor.BLACK, FlxColor.TRANSPARENT], 1, 360);
-		positionTextBg.setPosition(0, FlxG.height - positionTextBg.height);
-		positionTextBg.visible = false;
-		positionTextBg.alpha = 0.8;
-		add(positionTextBg);
-		positionText.cameras = [ui];
-		add(positionText);
-
-		var exit = new UIButton(0, itemText.y - 25, "Exit & Save", () ->
-		{
-			if (options[curOption].toLowerCase().contains('pad'))
-				control.touchPad.setExtrasDefaultPos();
-			if (options[curOption] == 'Pad-Extra')
-			{
-				var nuhuh = new FlxText(0, 0, FlxG.width / 2, 'Pad-Extra Is Just A Binding Option\nPlease Select A Different Option To Exit.');
-				nuhuh.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, FlxTextAlign.CENTER);
-				nuhuh.screenCenter();
-				nuhuh.cameras = [ui];
-				add(nuhuh);
-				FlxTween.tween(nuhuh, {alpha: 0}, 3.4, {
-					ease: FlxEase.circOut,
-					onComplete: (twn:FlxTween) ->
-					{
-						nuhuh.destroy();
-						remove(nuhuh);
-					}
-				});
-				return;
-			}
-			MobileData.mode = curOption;
-			if (options[curOption] == 'Pad-Custom')
-				MobileData.setTouchPadCustom(control.touchPad);
-			controls.isInSubstate = FlxG.mouse.visible = false;
-			FlxG.sound.play(Paths.sound('cancelMenu'));
-			MobileData.forcedMode = null;
-			close();
-		});
-		exit.color = FlxColor.LIME;
-		exit.setGraphicSize(Std.int(exit.width) * 3);
-		exit.updateHitbox();
-		exit.x = FlxG.width - exit.width - 70;
-		exit.label.setFormat(Paths.font('vcr.ttf'), 28, FlxColor.WHITE, FlxTextAlign.CENTER);
-		exit.label.fieldWidth = exit.width;
-		exit.label.x = ((exit.width - exit.label.width) / 2) + exit.x;
-		exit.label.offset.y = -10; // WHY THE FUCK I CAN'T CHANGE THE LABEL Y
-		exit.cameras = [ui];
-		add(exit);
-
-		reset = new UIButton(exit.x, exit.height + exit.y + 20, "Reset", () ->
-		{
-			changeOption(0); // realods the current control mode ig?
-			FlxG.sound.play(Paths.sound('cancelMenu'));
-		});
-		reset.color = FlxColor.RED;
-		reset.setGraphicSize(Std.int(reset.width) * 3);
-		reset.updateHitbox();
-		reset.label.setFormat(Paths.font('vcr.ttf'), 28, FlxColor.WHITE, FlxTextAlign.CENTER);
-		reset.label.fieldWidth = reset.width;
-		reset.label.x = ((reset.width - reset.label.width) / 2) + reset.x;
-		reset.label.offset.y = -10;
-		reset.cameras = [ui];
-		add(reset);
-
-		changeOption(0);
 	}
 
-	override function update(elapsed:Float)
+	#if android
+	function onStorageChange():Void
 	{
-		checkArrowButton(leftArrow, () ->
-		{
-			changeOption(-1);
-		});
+		File.saveContent(lime.system.System.applicationStorageDirectory + 'storagetype.txt', ClientPrefs.data.storageType);
 
-		checkArrowButton(rightArrow, () ->
-		{
-			changeOption(1);
-		});
+		var lastStoragePath:String = StorageType.fromStrForce(lastStorageType) + '/';
 
-		if (options[curOption] == 'Pad-Custom' || options[curOption] == 'Pad-Extra')
+		try
 		{
-			if (buttonBinded)
-			{
-				if (TouchUtil.justReleased)
-				{
-					bindButton = null;
-					buttonBinded = false;
-				}
-				else
-					moveButton(TouchUtil.touch, bindButton);
-			}
-			else
-			{
-				control.touchPad.forEachAlive((button:TouchButton) ->
-				{
-					if (button.justPressed)
-						moveButton(TouchUtil.touch, button);
-				});
-			}
-			control.touchPad.forEachAlive((button:TouchButton) ->
-			{
-				if (button != bindButton && buttonBinded)
-				{
-					bindButton.centerBounds();
-					button.bounds.immovable = true;
-					bindButton.bounds.immovable = false;
-					button.centerBounds();
-					FlxG.overlap(bindButton.bounds, button.bounds, function(a:Dynamic, b:Dynamic)
-					{ // these args dosen't work fuck them :/
-						bindButton.centerInBounds();
-						button.centerBounds();
-						bindButton.bounds.immovable = true;
-						button.bounds.immovable = false;
-						// trace('button${bindButton.tag} & button${button.tag} collided');
-					}, function(a:Dynamic, b:Dynamic)
-					{
-						if (!bindButton.bounds.immovable)
-						{
-							if (bindButton.bounds.x > button.bounds.x)
-								bindButton.bounds.x = button.bounds.x + button.bounds.width;
-							else
-								bindButton.bounds.x = button.bounds.x - button.bounds.width;
-
-							if (bindButton.bounds.y > button.bounds.y)
-								bindButton.bounds.y = button.bounds.y + button.bounds.height;
-							else if (bindButton.bounds.y != button.bounds.y)
-								bindButton.bounds.y = button.bounds.y - button.bounds.height;
-						}
-						return true;
-					});
-					/*FlxG.collide(bindButton.bounds, button.bounds, function(a:Dynamic, b:Dynamic) { // these args dosen't work fuck them :/
-						bindButton.centerInBounds();
-						button.centerBounds();
-						bindButton.bounds.immovable = true;
-						button.bounds.immovable = false;
-						trace('button${bindButton.tag} & button${button.tag} collided');
-					});*/
-				}
-			});
+			if (ClientPrefs.data.storageType != "EXTERNAL")
+				Sys.command('rm', ['-rf', lastStoragePath]);
 		}
-
-		if (curOption == 4)
-			updateOfficialStrumTouch();
-
-		tweenieShit += 180 * elapsed;
-
-		super.update(elapsed);
+		catch (e:haxe.Exception)
+			trace('Failed to remove last directory. (${e.message})');
 	}
 
-	function changeControls(?type:Int, ?extraMode:Bool = false)
-	{
-		if (type == null)
-			type = curOption;
-		if (control != null)
-			control.destroy();
-		if (members.contains(control))
-			remove(control);
-		control = new MobileControls(type, extraMode);
-		add(control);
-		control.cameras = [ui];
-	}
+	#end
 
-	function changeOption(change:Int)
+	override public function destroy()
 	{
-		FlxG.sound.play(Paths.sound('scrollMenu'));
-
-		if (officialPlayerStrums != null)
+		super.destroy();
+		#if android
+		if (ClientPrefs.data.storageType != lastStorageType)
 		{
-			remove(officialPlayerStrums, true);
-			officialPlayerStrums.destroy();
-			officialPlayerStrums = null;
+			onStorageChange();
+			CoolUtil.showPopUp('Storage Type has been changed and you needed restart the game!!\nPress OK to close the game.', 'Notice!');
+			lime.system.System.exit(0);
 		}
-		curOption += change;
-
-		if (curOption < 0)
-			curOption = options.length - 1;
-		if (curOption >= options.length)
-			curOption = 0;
-
-		switch (curOption)
-		{
-			case 0 | 1 | 3:
-				reset.visible = false;
-				changeControls();
-			case 4:
-				reset.visible = false;
-				changeControls();
-				showOfficialPlayerStrums();
-			case 2:
-				reset.visible = true;
-				changeControls();
-			case 5:
-				reset.visible = true;
-				changeControls(0, true);
-				control.touchPad.forEachAlive((button:TouchButton) ->
-				{
-					var ignore = ['G', 'S'];
-					if (!ignore.contains(button.tag.toUpperCase()))
-						button.visible = button.active = false;
-				});
-		}
-		updatePosText();
-		setOptionText();
-	}
-
-	private inline function mobilePlayerNoteSpacing():Float
-	{
-		var amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
-		return Note.swagWidth * ((FlxG.height / FlxG.width) * 2.8) * amplification;
-	}
-
-	private inline function mobilePlayerLaneX(lane:Int):Float
-	{
-		var arrowWidth:Float = Note.swagWidth;
-		var spacing:Float = mobilePlayerNoteSpacing();
-		var groupWidth:Float = arrowWidth + spacing * 3;
-		return ((FlxG.width - groupWidth) * 0.5) + (spacing * lane);
-	}
-
-	function showOfficialPlayerStrums():Void
-	{
-		officialPlayerStrums = new FlxTypedGroup<StrumNote>();
-		officialPlayerStrums.cameras = [ui];
-		add(officialPlayerStrums);
-		officialStrumTouchState = [false, false, false, false];
-
-		var strumLineX:Float = 0;
-		var strumLineY:Float = 0;
-
-		for (i in 0...4)
-		{
-			var receptor:StrumNote = new StrumNote(strumLineX, strumLineY, i, 1);
-			receptor.downScroll = true;
-			receptor.updateHitbox();
-			officialPlayerStrums.add(receptor);
-			receptor.postAddedToGroup();
-			receptor.x = mobilePlayerLaneX(i) - 75;
-			if(i > 1) receptor.x = mobilePlayerLaneX(i) + 75;
-			receptor.y = FlxG.height - receptor.height - 95;
-			receptor.alpha = 1;
-			receptor.visible = true;
-			receptor.cameras = [ui];
-		}
-	}
-
-	function updateOfficialStrumTouch():Void
-	{
-		if (officialPlayerStrums == null) return;
-
-		var touched:Array<Bool> = [false, false, false, false];
-		for (touch in FlxG.touches.list)
-		{
-			if (!touch.pressed) continue;
-			var point:FlxPoint = touch.getScreenPosition(ui, FlxPoint.get());
-
-			for (lane in 0...4)
-			{
-				var receptor:StrumNote = officialPlayerStrums.members[lane];
-				if (receptor == null || !receptor.exists) continue;
-
-				var laneLeft:Float = receptor.x;
-				var laneRight:Float = receptor.x + receptor.width;
-				var laneTop:Float = receptor.y - receptor.height * 0.35;
-				var laneBottom:Float = receptor.y + receptor.height * 1.35;
-				if (point.x >= laneLeft && point.x <= laneRight
-					&& point.y >= laneTop && point.y <= laneBottom)
-					touched[lane] = true;
-			}
-
-			for (pairStart in [0, 2])
-			{
-				var first:StrumNote = officialPlayerStrums.members[pairStart];
-				var second:StrumNote = officialPlayerStrums.members[pairStart + 1];
-				if (first == null || second == null || !first.exists || !second.exists) continue;
-
-				var gapLeft:Float = first.x + first.width;
-				var gapRight:Float = second.x;
-				var gapTop:Float = Math.max(first.y - first.height * 0.35, second.y - second.height * 0.35);
-				var gapBottom:Float = Math.min(first.y + first.height * 1.35, second.y + second.height * 1.35);
-				if (gapRight > gapLeft && point.x >= gapLeft && point.x <= gapRight
-					&& point.y >= gapTop && point.y <= gapBottom)
-				{
-					touched[pairStart] = true;
-					touched[pairStart + 1] = true;
-				}
-			}
-			point.put();
-		}
-
-		for (lane in 0...4)
-		{
-			var receptor:StrumNote = officialPlayerStrums.members[lane];
-			if (receptor == null) continue;
-			if (touched[lane] && !officialStrumTouchState[lane])
-				receptor.playAnim('pressed');
-			else if (!touched[lane] && officialStrumTouchState[lane])
-				receptor.playAnim('static');
-			officialStrumTouchState[lane] = touched[lane];
-		}
-	}
-
-	function setOptionText()
-	{
-		itemText.text = options[curOption].replace('-', ' ');
-		itemText.updateHitbox();
-		itemText.offset.set(0, 15);
-		FlxTween.tween(rightArrow, {x: itemText.x + itemText.width + 10}, 0.1, {ease: FlxEase.quintOut});
-	}
-
-	function updatePosText()
-	{
-		var optionName = options[curOption];
-		if (optionName == 'Pad-Custom' || optionName == 'Pad-Extra')
-		{
-			positionText.visible = positionTextBg.visible = true;
-			if (optionName == 'Pad-Custom')
-			{
-				positionText.text = 'LEFT X: ${control.touchPad.buttonLeft.x} - Y: ${control.touchPad.buttonLeft.y}\nDOWN X: ${control.touchPad.buttonDown.x} - Y: ${control.touchPad.buttonDown.y}\n\nUP X: ${control.touchPad.buttonUp.x} - Y: ${control.touchPad.buttonUp.y}\nRIGHT X: ${control.touchPad.buttonRight.x} - Y: ${control.touchPad.buttonRight.y}';
-			}
-			else
-			{
-				positionText.text = 'S X: ${control.touchPad.buttonExtra.x} - Y: ${control.touchPad.buttonExtra.y}\n\n\n\nG X: ${control.touchPad.buttonExtra2.x} - Y: ${control.touchPad.buttonExtra2.y}';
-			}
-			positionText.setPosition(0, (((positionTextBg.height - positionText.height) / 2) + positionTextBg.y));
-		}
-		else
-			positionText.visible = positionTextBg.visible = false;
-	}
-
-	function checkArrowButton(button:FlxSprite, func:Void->Void)
-	{
-		if (TouchUtil.overlaps(button))
-		{
-			if (TouchUtil.pressed)
-				button.animation.play('press');
-			if (TouchUtil.justPressed)
-			{
-				if (options[curOption] == "Pad-Extra" && control.touchPad != null)
-					control.touchPad.setExtrasDefaultPos();
-				func();
-			}
-		}
-		if (TouchUtil.justReleased && button.animation.curAnim.name == 'press')
-			button.animation.play('idle');
-		if (FlxG.keys.justPressed.LEFT && button == leftArrow || FlxG.keys.justPressed.RIGHT && button == rightArrow)
-			func();
-	}
-
-	function moveButton(touch:FlxTouch, button:TouchButton):Void
-	{
-		bindButton = button;
-		buttonBinded = bindButton == null ? false : true;
-		bindButton.x = touch.x - Std.int(bindButton.width / 2);
-		bindButton.y = touch.y - Std.int(bindButton.height / 2);
-		updatePosText();
+		#end
 	}
 }

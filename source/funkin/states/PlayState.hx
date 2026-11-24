@@ -2019,19 +2019,27 @@ class PlayState extends MusicBeatState
 			}
 			else babyArrow.alpha = targetAlpha;
 
-			if (player == 1) {
-				playerStrums.add(babyArrow);
-			} else {
-				if(ClientPrefs.data.middleScroll && !useMobileLayout)
-				{
-					babyArrow.x += 310;
-					if(i > 1) babyArrow.x += FlxG.width / 2 + 25;
+				if (player == 1) {
+					playerStrums.add(babyArrow);
+				} else {
+					opponentStrums.add(babyArrow);
 				}
-				opponentStrums.add(babyArrow);
-			}
 
 			strumLineNotes.add(babyArrow);
-			babyArrow.postAddedToGroup();
+				babyArrow.postAddedToGroup();
+
+				// Psych-style opponent receptors use the same vertical line as the
+				// player receptors. Apply the X layout after postAddedToGroup(),
+				// because that method adds the lane and player-side offsets.
+				if (player < 1 && !useMobileLayout)
+				{
+					babyArrow.y = strumLineY;
+					if (ClientPrefs.data.middleScroll)
+					{
+						babyArrow.x = strumLineX + 50 + Note.swagWidth * i + 310;
+						if (i > 1) babyArrow.x += FlxG.width / 2 + 25;
+					}
+				}
 
 			#if mobile
 			// postAddedToGroup applies the desktop lane offset. Override it only
@@ -2042,14 +2050,15 @@ class PlayState extends MusicBeatState
 				babyArrow.x = mobilePlayerLaneX(i) - 75;
 				if(i > 1) babyArrow.x = mobilePlayerLaneX(i) + 75;
 				babyArrow.y = FlxG.height - babyArrow.height - 95;
-			} else if (useMobileLayout && player < 1) {
-				babyArrow.scale.set(0.4, 0.4);
-				babyArrow.updateHitbox();
-				// Keep the compact opponent receptors separate instead of stacking
-				// all four lanes at the same x coordinate.
-				babyArrow.x = 45 + (babyArrow.width + 4) * i;
-				babyArrow.y = 55;
-			}
+				} else if (useMobileLayout && player < 1) {
+					babyArrow.scale.set(0.4, 0.4);
+					babyArrow.updateHitbox();
+					// Use the same receptor row as the player and the same centered
+					// lane calculation, preventing stacked opponent receptors.
+					babyArrow.x = mobilePlayerLaneX(i) - 75;
+					if(i > 1) babyArrow.x = mobilePlayerLaneX(i) + 75;
+					babyArrow.y = FlxG.height - Note.swagWidth - 95 + (Note.swagWidth - babyArrow.height) * 0.5;
+				}
 			#end
 		}
 	}
@@ -3821,7 +3830,7 @@ class PlayState extends MusicBeatState
 		if(note != null) {
 			var strum:StrumNote = playerStrums.members[note.noteData];
 			if(strum != null)
-				spawnHoldCover(strum.x, strum.y, note.noteData, note, endCover);
+				spawnHoldCover(strum.x + strum.width * 0.5, strum.y + strum.height * 0.5, note.noteData, note, endCover);
 		}
 	}
 	public function spawnHoldCover(x:Float, y:Float, data:Int, ?note:Note = null, endCover:Bool = false) {

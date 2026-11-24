@@ -16,9 +16,10 @@ typedef NoteSplashConfig = {
 class NoteSplash extends FlxSprite
 {
 	public var rgbShader:PixelSplashShaderRef;
-	private var idleAnim:String;
-	private var _textureLoaded:String = null;
-	private var _configLoaded:String = null;
+		private var idleAnim:String;
+		private var _textureLoaded:String = null;
+		private var _configLoaded:String = null;
+		private var _holdCoverAtlasActive:Bool = false;
 
 	public static var defaultNoteSplash(default, never):String = 'noteSplashes/noteSplashes';
 	public static var configs:Map<String, NoteSplashConfig> = new Map<String, NoteSplashConfig>();
@@ -47,8 +48,16 @@ class NoteSplash extends FlxSprite
 	}
 
 	var maxAnims:Int = 2;
-	public function setupNoteSplash(x:Float, y:Float, direction:Int = 0, ?note:Note = null) {
-		setPosition(x - Note.swagWidth * 0.95, y - Note.swagWidth);
+		public function setupNoteSplash(x:Float, y:Float, direction:Int = 0, ?note:Note = null) {
+			// setupHoldCover temporarily replaces frames with a holdCover atlas.
+			// Reload the normal splash atlas before playing a regular splash again.
+			if (_holdCoverAtlasActive)
+			{
+				_textureLoaded = null;
+				_configLoaded = null;
+				_holdCoverAtlasActive = false;
+			}
+			setPosition(x - Note.swagWidth * 0.95, y - Note.swagWidth);
 		aliveTime = 0;
 
 		var texture:String = null;
@@ -134,6 +143,12 @@ class NoteSplash extends FlxSprite
 		}
 		else frames = Paths.getSparrowAtlas(skin);
 		if (frames == null) return;
+		// holdCover is centered on the receptor, unlike the legacy splash
+		// offset which is based on the old note-splash atlas dimensions.
+		updateHitbox();
+		offset.set(0, 0);
+		setPosition(x - width * 0.5, y - height * 0.5 + 8);
+		_holdCoverAtlasActive = true;
 
 		var animationName:String = endCover ? 'holdCoverEnd' : 'holdCover';
 		var prefixes:Array<String> = endCover
@@ -152,6 +167,11 @@ class NoteSplash extends FlxSprite
 				return;
 			}
 		}
+
+		// The holdCover atlas can exist with a different XML prefix. Do not
+		// leave the recycled sprite on the wrong atlas with no animation: restore
+		// the regular splash so note splashes never disappear entirely.
+		setupNoteSplash(x, y, direction, note);
 	}
 
 	public static function getSplashSkinPostfix()

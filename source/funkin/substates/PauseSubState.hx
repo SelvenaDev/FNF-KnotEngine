@@ -40,8 +40,9 @@ class PauseSubState extends MusicBeatSubstate
 	var skipTimeTracker:Alphabet;
 	var curTime:Float = Math.max(0, Conductor.songPosition);
 
-	var missingTextBG:FlxSprite;
-	var missingText:FlxText;
+		var missingTextBG:FlxSprite;
+		var missingText:FlxText;
+		var pauseTransitionStarted:Bool = false;
 
 	public static var songName:String = null;
 
@@ -197,9 +198,42 @@ class PauseSubState extends MusicBeatSubstate
 		return (formattedSongName != '') ? formattedSongName : formattedPauseMusic;
 	}
 
-	var holdTime:Float = 0;
-	var cantUnpause:Float = 0.1;
-	override function update(elapsed:Float)
+		var holdTime:Float = 0;
+		var cantUnpause:Float = 0.1;
+
+		private function animatePauseMenuThen(action:Void->Void):Void
+		{
+			if (pauseTransitionStarted) return;
+			pauseTransitionStarted = true;
+
+			var remaining:Int = 0;
+			for (item in grpMenuShit.members)
+			{
+				if (item != null) remaining++;
+			}
+
+			if (remaining == 0)
+			{
+				action();
+				return;
+			}
+
+			for (item in grpMenuShit.members)
+			{
+				if (item == null) continue;
+				FlxTween.tween(item, {x: item.x - FlxG.width - 180, alpha: 0}, 0.55,
+				{
+					ease: FlxEase.quadIn,
+					onComplete: function(slideTween:FlxTween)
+					{
+						remaining--;
+						if (remaining <= 0) action();
+					}
+				});
+			}
+		}
+
+		override function update(elapsed:Float)
 	{
 		cantUnpause -= elapsed;
 		if (pauseMusic.volume < 0.5)
@@ -291,10 +325,10 @@ class PauseSubState extends MusicBeatSubstate
 				regenMenu();
 			}
 
-			switch (daSelected)
-			{
-				case "Resume":
-					close();
+				switch (daSelected)
+				{
+					case "Resume":
+						animatePauseMenuThen(function() { close(); });
 				case 'Change Difficulty':
 					menuItems = difficultyChoices;
 					deleteSkipTimeText();
@@ -303,13 +337,16 @@ class PauseSubState extends MusicBeatSubstate
 					PlayState.instance.practiceMode = !PlayState.instance.practiceMode;
 					PlayState.changedDifficulty = true;
 					practiceText.visible = PlayState.instance.practiceMode;
-				case "Restart Song":
-					restartSong();
-				case 'Chart Editor':
-					PlayState.instance.openChartEditor();
-				case "Leave Charting Mode":
-					restartSong();
-					PlayState.chartingMode = false;
+					case "Restart Song":
+						animatePauseMenuThen(function() { restartSong(); });
+					case 'Chart Editor':
+						animatePauseMenuThen(function() { PlayState.instance.openChartEditor(); });
+					case "Leave Charting Mode":
+						animatePauseMenuThen(function()
+						{
+							restartSong();
+							PlayState.chartingMode = false;
+						});
 				case 'Skip Time':
 					if(curTime < Conductor.songPosition)
 					{
@@ -336,32 +373,38 @@ class PauseSubState extends MusicBeatSubstate
 					PlayState.instance.botplayTxt.visible = PlayState.instance.cpuControlled;
 					PlayState.instance.botplayTxt.alpha = 1;
 					PlayState.instance.botplaySine = 0;
-				case 'Options':
-					PlayState.instance.paused = true; // For lua
-					PlayState.instance.vocals.volume = 0;
-					MusicBeatState.switchState(new OptionsState());
-					if(ClientPrefs.data.pauseMusic != 'None')
-					{
-						FlxG.sound.playMusic(Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic)), pauseMusic.volume);
-						FlxTween.tween(FlxG.sound.music, {volume: 1}, 0.8);
-						FlxG.sound.music.time = pauseMusic.time;
-					}
-					OptionsState.onPlayState = true;
-				case "Exit to menu":
-					#if DISCORD_ALLOWED DiscordClient.resetClientID(); #end
-					PlayState.deathCounter = 0;
-					PlayState.seenCutscene = false;
+					case 'Options':
+						animatePauseMenuThen(function()
+						{
+							PlayState.instance.paused = true; // For lua
+							PlayState.instance.vocals.volume = 0;
+							MusicBeatState.switchState(new OptionsState());
+							if(ClientPrefs.data.pauseMusic != 'None')
+							{
+								FlxG.sound.playMusic(Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic)), pauseMusic.volume);
+								FlxTween.tween(FlxG.sound.music, {volume: 1}, 0.8);
+								FlxG.sound.music.time = pauseMusic.time;
+							}
+							OptionsState.onPlayState = true;
+						});
+					case "Exit to menu":
+						animatePauseMenuThen(function()
+						{
+							#if DISCORD_ALLOWED DiscordClient.resetClientID(); #end
+							PlayState.deathCounter = 0;
+							PlayState.seenCutscene = false;
 
-					Mods.loadTopMod();
-					if(PlayState.isStoryMode)
-						MusicBeatState.switchState(new StoryMenuState());
-					else 
-						MusicBeatState.switchState(new FreeplayState());
+							Mods.loadTopMod();
+							if(PlayState.isStoryMode)
+								MusicBeatState.switchState(new StoryMenuState());
+							else 
+								MusicBeatState.switchState(new FreeplayState());
 
-					FlxG.sound.playMusic(Paths.music('freakyMenu'));
-					PlayState.changedDifficulty = false;
-					PlayState.chartingMode = false;
-					FlxG.camera.followLerp = 0;
+							FlxG.sound.playMusic(Paths.music('freakyMenu'));
+							PlayState.changedDifficulty = false;
+							PlayState.chartingMode = false;
+							FlxG.camera.followLerp = 0;
+						});
 			}
 		}
 
