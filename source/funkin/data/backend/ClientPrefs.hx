@@ -59,7 +59,7 @@ import funkin.states.TitleState;
 
 	public var ghostTapping:Bool = true;
 	public var botplayName:String = 'Normal';
-	public var timeTxtType:String = 'Time Left';
+	public var timeBarType:String = 'Time Left';
 	public var hudColor:String = 'Off';
 	public var iconBops:Bool = true;
 	public var scoreZoom:Bool = true;

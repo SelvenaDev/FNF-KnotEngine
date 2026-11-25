@@ -74,7 +74,6 @@ class MobileData
 		}
 
 		touchPad.applyWideScreenAnchors();
-		touchPad.applyWideScreenAnchors();
 		return touchPad;
 	}
 
