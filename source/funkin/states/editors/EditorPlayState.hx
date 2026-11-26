@@ -192,18 +192,13 @@ class EditorPlayState extends MusicBeatSubstate
 		#end
 
 		#if mobile
-		if (MobileData.mode != 4)
+		addMobileControls();
+		if (mobileControls != null && mobileControls.instance != null)
 		{
-			addMobileControls();
-			if (mobileControls != null && mobileControls.instance != null)
-			{
-				mobileControls.instance.visible = true;
-				mobileControls.onButtonDown.add(onButtonPress);
-				mobileControls.onButtonUp.add(onButtonRelease);
-			}
+			mobileControls.instance.visible = true;
+			mobileControls.onButtonDown.add(onButtonPress);
+			mobileControls.onButtonUp.add(onButtonRelease);
 		}
-		else
-			removeMobileControls();
 		#end
 		
 		generateSong(PlayState.SONG.song);

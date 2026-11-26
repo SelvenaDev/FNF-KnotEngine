@@ -50,26 +50,30 @@ class MusicBeatState extends FlxUIState
 
 	public function addMobileControls(defaultDrawTarget:Bool = false):Void
 	{
-		// Official mode uses the gameplay strumlines as touch controls, not TouchPad.
+		var extraMode = MobileData.extraActions.get(ClientPrefs.data.extraButtons);
+		// Official mode uses gameplay receptors for notes, but can still show
+		// the optional mechanic buttons used by Lua/HScript mods.
 		if (MobileData.mode == 4)
 		{
 			removeMobileControls();
-			return;
+			if (extraMode == null || ClientPrefs.data.extraButtons == 'NONE') return;
+			mobileControls = new TouchPad('NONE', 'NONE', extraMode);
 		}
-
-		var extraMode = MobileData.extraActions.get(ClientPrefs.data.extraButtons);
-
-		switch (MobileData.mode)
+		else
 		{
-			case 0: // RIGHT_FULL
-				mobileControls = new TouchPad('RIGHT_FULL', 'NONE', extraMode);
-			case 1: // LEFT_FULL
-				mobileControls = new TouchPad('LEFT_FULL', 'NONE', extraMode);
-			case 2: // CUSTOM
-				mobileControls = MobileData.getTouchPadCustom(new TouchPad('RIGHT_FULL', 'NONE', extraMode));
-			case 3: // HITBOX
-				mobileControls = new Hitbox(extraMode);
+			switch (MobileData.mode)
+			{
+				case 0: // RIGHT_FULL
+					mobileControls = new TouchPad('RIGHT_FULL', 'NONE', extraMode);
+				case 1: // LEFT_FULL
+					mobileControls = new TouchPad('LEFT_FULL', 'NONE', extraMode);
+				case 2: // CUSTOM
+					mobileControls = MobileData.getTouchPadCustom(new TouchPad('RIGHT_FULL', 'NONE', extraMode));
+				case 3: // HITBOX
+					mobileControls = new Hitbox(extraMode);
+			}
 		}
+		if (mobileControls == null) return;
 
 		mobileControls.instance = MobileData.setButtonsColors(mobileControls.instance);
 		mobileControlsCam = new FlxCamera();

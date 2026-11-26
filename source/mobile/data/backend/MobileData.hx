@@ -74,6 +74,7 @@ class MobileData
 		}
 
 		touchPad.applyWideScreenAnchors();
+		touchPad.applyWideScreenAnchors();
 		return touchPad;
 	}
 
@@ -92,9 +93,15 @@ class MobileData
 			buttonsInstance.buttonUp,
 			buttonsInstance.buttonRight])
 		{
-			button.color = data.arrowRGB[i][0];
-			button.label.color = data.arrowRGB[i][0];
-			button.label.updateColorTransform();
+			if (button != null)
+			{
+				button.color = data.arrowRGB[i][0];
+				if (button.label != null)
+				{
+					button.label.color = data.arrowRGB[i][0];
+					button.label.updateColorTransform();
+				}
+			}
 		}
 
 		return buttonsInstance;

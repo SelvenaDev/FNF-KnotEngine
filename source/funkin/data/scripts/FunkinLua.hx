@@ -186,11 +186,13 @@ class FunkinLua {
 		set('middlescroll', ClientPrefs.data.middleScroll);
 		set('subtitles', ClientPrefs.data.subTitles);
 		set('framerate', ClientPrefs.data.framerate);
-		set('ghostTapping', ClientPrefs.data.ghostTapping);
-		set('botplayName', ClientPrefs.data.botplayName);
-		set('hideHud', ClientPrefs.data.hideHud);
-		set('timeBarType', ClientPrefs.data.timeBarType);
-		set('hudColor', ClientPrefs.data.hudColor);
+			set('ghostTapping', ClientPrefs.data.ghostTapping);
+			set('botplayName', ClientPrefs.data.botplayName);
+			set('hideHud', ClientPrefs.data.hideHud);
+			var timeTextType:Dynamic = Reflect.field(ClientPrefs.data, 'timeTxtType');
+			if (timeTextType == null) timeTextType = Reflect.field(ClientPrefs.data, 'timeBarType');
+			set('timeTxtType', timeTextType == null ? 'Time Left' : timeTextType);
+			set('hudColor', ClientPrefs.data.hudColor);
 		set('iconBops', ClientPrefs.data.iconBops);
 		set('scoreZoom', ClientPrefs.data.scoreZoom);
 		set('cameraZoomOnBeat', ClientPrefs.data.camZooms);

@@ -534,7 +534,7 @@ class PlayState extends MusicBeatState
 		add(uiGroup);
 
 		Conductor.songPosition = -5000 / Conductor.songPosition;
-		var showTime:Bool = (ClientPrefs.data.timeBarType != 'Disabled');
+		var showTime:Bool = (getTimeDisplayType() != 'Disabled');
 		timeTxt = new FlxText(STRUM_X + (FlxG.width / 2) - 248, 19, 400, "", 32);
 		timeTxt.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		timeTxt.scrollFactor.set();
@@ -548,7 +548,7 @@ class PlayState extends MusicBeatState
 		if (ClientPrefs.data.downScroll) timeTxt.y = FlxG.height - 44;
 		#end
 
-		switch (ClientPrefs.data.timeBarType)
+		switch (getTimeDisplayType())
 		{
 			case 'Song Name':
 				if (!cpuControlled) timeTxt.text = SONG.song;
@@ -576,7 +576,7 @@ class PlayState extends MusicBeatState
 		strumLineNotes = new FlxTypedGroup<StrumNote>();
 		noteGroup.add(strumLineNotes);
 
-		if (ClientPrefs.data.timeBarType == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine')
+		if(getTimeDisplayType() == 'Song Name')
 		{
 			timeTxt.size = 24;
 			timeTxt.y += 3;
@@ -783,19 +783,14 @@ class PlayState extends MusicBeatState
 		#if mobile
 		var selectedMobileMode:Int = MobileData.mode;
 		MobileData.forcedMode = selectedMobileMode;
-
-		if (selectedMobileMode != 4) {
-			addMobileControls();
-			if (mobileControls != null && mobileControls.instance != null)
-			{
-				mobileControls.instance.visible = true;
-				mobileControls.onButtonDown.add(onButtonPress);
-				mobileControls.onButtonUp.add(onButtonRelease);
-			}
+		addMobileControls();
+		if (mobileControls != null && mobileControls.instance != null)
+		{
+			mobileControls.instance.visible = true;
+			mobileControls.onButtonDown.add(onButtonPress);
+			mobileControls.onButtonUp.add(onButtonRelease);
 		}
-		else
-			removeMobileControls();
-			MobileData.forcedMode = null;
+		MobileData.forcedMode = null;
 		#end
 
 		startCallback();
@@ -923,7 +918,15 @@ class PlayState extends MusicBeatState
 		}
 	}
 
-	function updateEngineMarkText():Void
+		private function getTimeDisplayType():String
+		{
+			// Support both names used by source revisions: timeTxtType and timeBarType.
+			var value:Dynamic = Reflect.field(ClientPrefs.data, 'timeTxtType');
+			if (value == null) value = Reflect.field(ClientPrefs.data, 'timeBarType');
+			return value == null ? 'Time Left' : Std.string(value);
+		}
+
+		function updateEngineMarkText():Void
 	{
 		if (engineTxt == null) return;
 
@@ -932,8 +935,8 @@ class PlayState extends MusicBeatState
 
 		switch (ClientPrefs.data.enginemarkStyle) {
 			case 'Kade Engine':
-				var songLabel:String = ((ClientPrefs.data.botplayName == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine') && cpuControlled
-					|| (ClientPrefs.data.timeBarType == 'Song Name' || ClientPrefs.data.timeBarType == 'Forever Engine'))
+				var songLabel:String = (ClientPrefs.data.botplayName == 'Song Name' && cpuControlled
+					|| getTimeDisplayType() == 'Song Name')
 					? "" : SONG.song + " - ";
 				engineTxt.text = songLabel + Difficulty.getString().toUpperCase() + " | " + version;
 			case 'Knot Engine':
@@ -1967,7 +1970,7 @@ class PlayState extends MusicBeatState
 	private inline function mobilePlayerNoteSpacing():Float
 	{
 		var amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
-		return Note.swagWidth * ((FlxG.height / FlxG.width) * 3.2) * amplification;
+		return Note.swagWidth * ((FlxG.height / FlxG.width) * 2.8) * amplification;
 	}
 
 	private inline function mobilePlayerLaneX(lane:Int):Float
@@ -2053,10 +2056,9 @@ class PlayState extends MusicBeatState
 				} else if (useMobileLayout && player < 1) {
 					babyArrow.scale.set(0.4, 0.4);
 					babyArrow.updateHitbox();
-					// Use the same receptor row as the player and the same centered
-					// lane calculation, preventing stacked opponent receptors.
-					babyArrow.x = mobilePlayerLaneX(i) - 75;
-					if(i > 1) babyArrow.x = mobilePlayerLaneX(i) + 75;
+					// Keep opponent receptors on the classic FNF left-side strumline,
+					// with the normal lane spacing instead of stacking over player lanes.
+					babyArrow.x = STRUM_X + 50 + Note.swagWidth * i;
 					babyArrow.y = FlxG.height - Note.swagWidth - 95 + (Note.swagWidth - babyArrow.height) * 0.5;
 				}
 			#end
@@ -2247,12 +2249,12 @@ class PlayState extends MusicBeatState
 			songPercent = (curTime / songLength);
 
 			var songCalc:Float = (songLength - curTime);
-			if(ClientPrefs.data.timeBarType == 'Time Elapsed') songCalc = curTime;
+				if(getTimeDisplayType() == 'Time Elapsed') songCalc = curTime;
 
 			var secondsTotal:Int = Math.floor(songCalc / 1000);
 			if(secondsTotal < 0) secondsTotal = 0;
 
-			if(ClientPrefs.data.timeBarType != 'Song Name' || ClientPrefs.data.timeBarType != 'Forever Engine')
+				if(getTimeDisplayType() != 'Song Name')
 				timeTxt.text = FlxStringUtil.formatTime(secondsTotal, false);
 		}
 
@@ -3712,6 +3714,11 @@ class PlayState extends MusicBeatState
 		if(opponentVocals.length <= 0) vocals.volume = 1;
 		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
 		note.hitByOpponent = true;
+		if (note.isSustainNote && !note.noteSplashData.disabled)
+		{
+			var isSustainEnd:Bool = note.nextNote == null || !note.nextNote.isSustainNote;
+			spawnHoldCoverOnNote(note, isSustainEnd, true);
+		}
 		
 		var result:Dynamic = callOnLuas('opponentNoteHit', [notes.members.indexOf(note), Math.abs(note.noteData), note.noteType, note.isSustainNote]);
 		if(result != LuaUtils.Function_Stop && result != LuaUtils.Function_StopHScript && result != LuaUtils.Function_StopAll) callOnHScript('opponentNoteHit', [note]);
@@ -3826,11 +3833,13 @@ class PlayState extends MusicBeatState
 				spawnNoteSplash(strum.x, strum.y, note.noteData, note);
 		}
 	}
-	public function spawnHoldCoverOnNote(note:Note, endCover:Bool = false) {
+	public function spawnHoldCoverOnNote(note:Note, endCover:Bool = false, opponentSide:Bool = false) {
 		if(note != null) {
-			var strum:StrumNote = playerStrums.members[note.noteData];
+			var strumGroup:FlxTypedGroup<StrumNote> = opponentSide ? opponentStrums : playerStrums;
+			var lane:Int = Std.int(Math.abs(note.noteData));
+			var strum:StrumNote = strumGroup.members[lane];
 			if(strum != null)
-				spawnHoldCover(strum.x + strum.width * 0.5, strum.y + strum.height * 0.5, note.noteData, note, endCover);
+				spawnHoldCover(strum.x + strum.width * 0.5, strum.y + strum.height * 0.5, lane, note, endCover);
 		}
 	}
 	public function spawnHoldCover(x:Float, y:Float, data:Int, ?note:Note = null, endCover:Bool = false) {

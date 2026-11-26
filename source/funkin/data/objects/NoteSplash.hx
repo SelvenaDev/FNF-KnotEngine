@@ -5,6 +5,7 @@ import funkin.data.backend.animation.KnotAnimationController;
 import funkin.data.shaders.RGBPalette;
 
 import flixel.graphics.frames.FlxFrame;
+import flixel.graphics.frames.FlxFrame.FlxFrameAngle;
 
 typedef NoteSplashConfig = {
 	anim:String,
@@ -16,10 +17,12 @@ typedef NoteSplashConfig = {
 class NoteSplash extends FlxSprite
 {
 	public var rgbShader:PixelSplashShaderRef;
-		private var idleAnim:String;
-		private var _textureLoaded:String = null;
-		private var _configLoaded:String = null;
-		private var _holdCoverAtlasActive:Bool = false;
+	private var idleAnim:String;
+	private var _textureLoaded:String = null;
+	private var _configLoaded:String = null;
+	private var _holdCoverAtlasActive:Bool = false;
+	private var _holdCoverAnchorX:Float = 0;
+	private var _holdCoverAnchorY:Float = 0;
 
 	public static var defaultNoteSplash(default, never):String = 'noteSplashes/noteSplashes';
 	public static var configs:Map<String, NoteSplashConfig> = new Map<String, NoteSplashConfig>();
@@ -77,10 +80,6 @@ class NoteSplash extends FlxSprite
 			// If Note RGB is enabled:
 			if(note != null && !note.noteSplashData.useGlobalShader)
 			{
-				
-				if(note.noteSplashData.r != -1) note.rgbShader.r = note.noteSplashData.r;
-				if(note.noteSplashData.g != -1) note.rgbShader.g = note.noteSplashData.g;
-				if(note.noteSplashData.b != -1) note.rgbShader.b = note.noteSplashData.b;
 				tempShader = note.rgbShader.parent;
 			}
 			else tempShader = Note.globalRgbShaders[direction];
@@ -89,6 +88,10 @@ class NoteSplash extends FlxSprite
 		alpha = ClientPrefs.data.splashAlpha;
 		if(note != null) alpha = note.noteSplashData.a;
 		rgbShader.copyValues(tempShader);
+		// Splash overrides belong to this splash only; changing note.rgbShader
+		// here would recolor the note and leak the override into later hits.
+		if (tempShader != null && note != null && !note.noteSplashData.useGlobalShader)
+			rgbShader.applyColorOverrides(note.noteSplashData.r, note.noteSplashData.g, note.noteSplashData.b);
 
 		if(note != null) antialiasing = note.noteSplashData.antialiasing;
 		if(PlayState.isPixelStage || !ClientPrefs.data.antialiasing) antialiasing = false;
@@ -139,16 +142,16 @@ class NoteSplash extends FlxSprite
 				skin = endSkin;
 				frames = endFrames;
 			}
-			else frames = Paths.getSparrowAtlas(skin);
+			else
+				frames = Paths.getSparrowAtlas(skin);
 		}
-		else frames = Paths.getSparrowAtlas(skin);
+		else
+			frames = Paths.getSparrowAtlas(skin);
+
 		if (frames == null) return;
-		// holdCover is centered on the receptor, unlike the legacy splash
-		// offset which is based on the old note-splash atlas dimensions.
-		updateHitbox();
-		offset.set(0, 0);
-		setPosition(x - width * 0.5, y - height * 0.5 + 8);
 		_holdCoverAtlasActive = true;
+		_holdCoverAnchorX = x;
+		_holdCoverAnchorY = y;
 
 		var animationName:String = endCover ? 'holdCoverEnd' : 'holdCover';
 		var prefixes:Array<String> = endCover
@@ -164,6 +167,8 @@ class NoteSplash extends FlxSprite
 				animation.addByPrefix(animationName, prefix, 24, false);
 				aliveTime = 0;
 				animation.play(animationName, true);
+				updateHitbox();
+				alignHoldCoverFrame();
 				return;
 			}
 		}
@@ -174,7 +179,29 @@ class NoteSplash extends FlxSprite
 		setupNoteSplash(x, y, direction, note);
 	}
 
-	public static function getSplashSkinPostfix()
+	private function alignHoldCoverFrame():Void
+	{
+		if (!_holdCoverAtlasActive || frame == null || frame.frame == null) return;
+
+		var cropWidth:Float = frame.frame.width;
+		var cropHeight:Float = frame.frame.height;
+		if (frame.angle != FlxFrameAngle.ANGLE_0)
+		{
+			var unrotatedWidth:Float = cropWidth;
+			cropWidth = cropHeight;
+			cropHeight = unrotatedWidth;
+		}
+
+		// FlxFrame applies frame.offset while drawing. Its draw transform and
+		// the centered origin cancel updateHitbox()'s sprite offset, so only
+		// the scaled frame offset and cropped half-size belong in this anchor.
+		setPosition(
+			_holdCoverAnchorX - (frame.offset.x + cropWidth * 0.5) * scale.x,
+			_holdCoverAnchorY - (frame.offset.y + cropHeight * 0.5) * scale.y
+		);
+	}
+
+		public static function getSplashSkinPostfix()
 	{
 		var skin:String = '';
 		if(ClientPrefs.data.splashSkin != ClientPrefs.defaultData.splashSkin)
@@ -261,6 +288,7 @@ class NoteSplash extends FlxSprite
 			(animation.curAnim == null && aliveTime >= buggedKillTime)) kill();
 
 		super.update(elapsed);
+		if (_holdCoverAtlasActive) alignHoldCoverFrame();
 	}
 }
 
@@ -284,6 +312,13 @@ class PixelSplashShaderRef {
 			shader.mult.value[0] = tempShader.shader.mult.value[0];
 		}
 		else shader.mult.value[0] = 0.0;
+	}
+
+	public function applyColorOverrides(r:FlxColor, g:FlxColor, b:FlxColor):Void
+	{
+		if (r != -1) shader.r.value = [r.redFloat, r.greenFloat, r.blueFloat];
+		if (g != -1) shader.g.value = [g.redFloat, g.greenFloat, g.blueFloat];
+		if (b != -1) shader.b.value = [b.redFloat, b.greenFloat, b.blueFloat];
 	}
 
 	public function new()
