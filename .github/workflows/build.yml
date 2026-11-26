@@ -89,7 +89,29 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
+      # HXCPP needs the Visual C++ compiler environment initialized on the
+      # GitHub-hosted Windows runner. Match the toolchain architecture to the
+      # requested Windows build instead of relying on the runner's default PATH.
+      - name: Setup MSVC
+        if: startsWith(inputs.name, 'Windows')
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ inputs.name == 'Windows x32' && 'x86' || 'x64' }}
+
+      - name: Verify MSVC
+        if: startsWith(inputs.name, 'Windows')
+        shell: pwsh
+        run: |
+          Get-Command cl.exe
+          cl.exe /Bv
+
+      - name: Compile Windows Release
+        if: startsWith(inputs.name, 'Windows')
+        shell: pwsh
+        run: haxelib run lime build ${{ inputs.buildArgs }}
+
       - name: Compile Release
+        if: ${{ !startsWith(inputs.name, 'Windows') }}
         shell: bash
         run: haxelib run lime build ${{ inputs.buildArgs }}
 
